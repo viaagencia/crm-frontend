@@ -91,32 +91,12 @@ export function useBackendSync() {
     let intervalId: ReturnType<typeof setInterval>;
 
     async function initialize() {
-      const serverState = await pullFromBackend();
-
-      const localLeadsRaw = localStorage.getItem('crm-leads');
-      const localLeads = localLeadsRaw ? JSON.parse(localLeadsRaw) : [];
-      const hasLocalData = Array.isArray(localLeads) && localLeads.length > 0;
-
-      if (serverState && serverState['crm-leads']) {
-        const serverLeads = serverState['crm-leads'] as unknown[];
-        const hasServerData = Array.isArray(serverLeads) && serverLeads.length > 0;
-
-        if (hasServerData && !hasLocalData) {
-          // Servidor tem dados, local vazio → importa sem disparar setItem hook
-          console.log('[Sync] Importando dados do servidor...');
-          for (const key of SYNC_KEYS) {
-            if (serverState[key]) originalSetItem(key, JSON.stringify(serverState[key]));
-          }
-          window.location.reload();
-          return;
-        }
-      }
-
-      // Envia dados locais imediatamente na inicialização
-      if (hasLocalData) {
+      // Fazer um push inicial de qualquer dado local
+      const localState = getLocalState();
+      if (Object.keys(localState).length > 0) {
         console.log('[Sync] Push inicial de dados locais...');
         await pushToBackend();
-        lastPushedRef.current = JSON.stringify(getLocalState());
+        lastPushedRef.current = JSON.stringify(localState);
       }
 
       // Polling: fallback para garantir sincronização mesmo se houver falhas
@@ -132,22 +112,10 @@ export function useBackendSync() {
 
     initialize();
 
-    // Ao ganhar foco: verifica se outro browser salvou dados mais recentes
+    // Ao ganhar foco: fazer push dos dados locais como precaução
     const onFocus = async () => {
-      const serverState = await pullFromBackend();
-      if (!serverState) return;
-
-      // Compara tamanho do JSON — servidor maior = tem mais dados
-      const serverJson = JSON.stringify(serverState['crm-leads'] || []);
-      const localJson = localStorage.getItem('crm-leads') || '[]';
-
-      if (serverJson.length > localJson.length) {
-        console.log('[Sync] Window ganhou foco, atualizando do servidor...');
-        for (const key of SYNC_KEYS) {
-          if (serverState[key]) originalSetItem(key, JSON.stringify(serverState[key]));
-        }
-        window.location.reload();
-      }
+      console.log('[Sync] Window ganhou foco, sincronizando dados locais...');
+      await pushToBackend();
     };
     window.addEventListener('focus', onFocus);
 
