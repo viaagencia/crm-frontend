@@ -1,5 +1,3 @@
-export function useToast() {
-  return {
-    toast: (props: any) => console.log('Toast:', props)
-  };
-}
+import { useToast, toast } from "@/hooks/use-toast";
+
+export { useToast, toast };

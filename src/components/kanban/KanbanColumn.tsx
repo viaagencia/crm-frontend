@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { KanbanCard } from './KanbanCard';
 import { Coluna, Tarefa } from '@/types/crm';
 import { Button } from '@/components/ui/button';

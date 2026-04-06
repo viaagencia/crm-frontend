@@ -1,56 +1,29 @@
-import React, { useState, useRef, useEffect, createContext, useContext } from 'react';
+import * as React from "react";
+import * as PopoverPrimitive from "@radix-ui/react-popover";
 
-interface PopoverContextType {
-  open: boolean;
-  setOpen: (open: boolean) => void;
-}
+import { cn } from "@/lib/utils";
 
-const PopoverContext = createContext<PopoverContextType | undefined>(undefined);
+const Popover = PopoverPrimitive.Root;
 
-export interface PopoverProps {
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  children: React.ReactNode;
-}
+const PopoverTrigger = PopoverPrimitive.Trigger;
 
-export function Popover({ open: controlledOpen, onOpenChange, children }: PopoverProps) {
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const isOpen = controlledOpen !== undefined ? controlledOpen : uncontrolledOpen;
+const PopoverContent = React.forwardRef<
+  React.ElementRef<typeof PopoverPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
+>(({ className, align = "center", sideOffset = 4, ...props }, ref) => (
+  <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Content
+      ref={ref}
+      align={align}
+      sideOffset={sideOffset}
+      className={cn(
+        "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        className,
+      )}
+      {...props}
+    />
+  </PopoverPrimitive.Portal>
+));
+PopoverContent.displayName = PopoverPrimitive.Content.displayName;
 
-  const setOpen = (newOpen: boolean) => {
-    if (controlledOpen === undefined) {
-      setUncontrolledOpen(newOpen);
-    }
-    onOpenChange?.(newOpen);
-  };
-
-  return (
-    <PopoverContext.Provider value={{ open: isOpen, setOpen }}>
-      <div className="relative">
-        {children}
-      </div>
-    </PopoverContext.Provider>
-  );
-}
-
-export function PopoverTrigger({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  const context = useContext(PopoverContext);
-  if (!context) return null;
-
-  return (
-    <button onClick={() => context.setOpen(!context.open)} className={className}>
-      {children}
-    </button>
-  );
-}
-
-export function PopoverContent({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  const context = useContext(PopoverContext);
-  if (!context || !context.open) return null;
-
-  return (
-    <div className={`absolute top-full left-0 mt-2 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4 min-w-[200px] ${className}`}>
-      {children}
-    </div>
-  );
-}
+export { Popover, PopoverTrigger, PopoverContent };
