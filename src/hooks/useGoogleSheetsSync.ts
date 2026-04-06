@@ -66,8 +66,16 @@ export function useGoogleSheetsSync() {
   const crm = useCrm();
   const [isSyncing, setIsSyncing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastSyncRef = useRef<number>(0);
 
   const sincronizar = useCallback(async () => {
+    // Evitar sincronizações muito frequentes que causam flickering
+    const now = Date.now();
+    if (now - lastSyncRef.current < 3000) {
+      console.log('[GoogleSheets] Sincronização ignorada (menos de 3s desde última)');
+      return;
+    }
+    lastSyncRef.current = now;
     try {
       setIsSyncing(true);
       const res = await fetch(SHEETS_GET_URL);
@@ -155,7 +163,9 @@ export function useGoogleSheetsSync() {
 
   useEffect(() => {
     sincronizar();
-    intervalRef.current = setInterval(sincronizar, 15000);
+    // Aumentado de 15s para 30s para reduzir conflitos com outros syncs
+    // Backend sync roda a cada 8s, aumentar Google Sheets reduz race conditions
+    intervalRef.current = setInterval(sincronizar, 30000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };

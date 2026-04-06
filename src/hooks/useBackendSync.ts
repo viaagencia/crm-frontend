@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://darksalmon-viper-304874.hostingersite.com';
-const SYNC_INTERVAL = 8000; // 8 segundos
+const SYNC_INTERVAL = 20000; // 20 segundos (aumentado de 8 para evitar race conditions com Google Sheets)
 const SYNC_DEBOUNCE = 1000; // 1s debounce para evitar PUTs frequentes
 
 const SYNC_KEYS = [
