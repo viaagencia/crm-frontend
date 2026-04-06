@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export interface SidebarProps {
   children: React.ReactNode;
@@ -31,4 +31,14 @@ export function SidebarMenuButton({ children, className = '' }: { children: Reac
       {children}
     </button>
   );
+}
+
+export function useSidebar() {
+  const [isOpen, setIsOpen] = useState(true);
+
+  return {
+    open: isOpen,
+    setOpen: setIsOpen,
+    toggleSidebar: () => setIsOpen(!isOpen)
+  };
 }
