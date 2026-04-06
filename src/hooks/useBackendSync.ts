@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://darksalmon-viper-304874.hostingersite.com';
 const SYNC_INTERVAL = 8000; // 8 segundos
+const SYNC_DEBOUNCE = 1000; // 1s debounce para evitar PUTs frequentes
 
 const SYNC_KEYS = [
   'crm-pipelines',
@@ -11,6 +12,10 @@ const SYNC_KEYS = [
   'crm-orcamentos',
   'crm-colunas-pacientes',
 ] as const;
+
+// Substituir localStorage.setItem para interceptar mudanças
+const originalSetItem = localStorage.setItem.bind(localStorage);
+let syncTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 function getLocalState(): Record<string, unknown> {
   const state: Record<string, unknown> = {};
@@ -27,13 +32,19 @@ async function pushToBackend() {
   const state = getLocalState();
   if (Object.keys(state).length === 0) return;
   try {
-    await fetch(`${API_URL}/api/crm-state`, {
+    console.log('[Sync] Enviando dados para backend...');
+    const res = await fetch(`${API_URL}/api/crm-state`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(state),
     });
+    if (res.ok) {
+      console.log('[Sync] ✅ Dados enviados com sucesso');
+    } else {
+      console.error('[Sync] ❌ Erro na resposta:', res.status);
+    }
   } catch (e) {
-    console.error('[Sync] Erro push:', e);
+    console.error('[Sync] Erro ao enviar:', e);
   }
 }
 
@@ -45,29 +56,38 @@ async function pullFromBackend(): Promise<Record<string, unknown> | null> {
   } catch { return null; }
 }
 
+// Interceptar setItem para fazer push imediato (com debounce)
+function interceptSetItem() {
+  localStorage.setItem = function(key: string, value: string) {
+    originalSetItem(key, value);
+
+    // Se for uma das chaves de sync, dispara push com debounce
+    if (SYNC_KEYS.includes(key as any)) {
+      console.log(`[Sync] localStorage.setItem("${key}") — agendando push...`);
+      if (syncTimeoutId) clearTimeout(syncTimeoutId);
+      syncTimeoutId = setTimeout(() => {
+        pushToBackend();
+      }, SYNC_DEBOUNCE);
+    }
+  };
+}
+
 /**
  * Sincroniza localStorage com MySQL via PUT/GET no backend.
- * Detecta mudanças em TEMPO REAL via handler de storage events + polling de 8s.
- * Push imediatamente quando detecta mudança; pull ao focar janela.
+ *
+ * ESTRATÉGIA:
+ * 1. Intercepta localStorage.setItem() para fazer push imediato (com debounce de 1s)
+ * 2. Polling a cada 8s como fallback para garantir sincronização
+ * 3. Ao abrir página: puxa dados do servidor se estiver vazio localmente
+ * 4. Ao ganhar foco: verifica se servidor tem dados mais novos
  */
 export function useBackendSync() {
   const lastPushedRef = useRef<string>('');
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
-
-  // Função auxiliar para fazer push com debounce
-  const debouncedPush = async () => {
-    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-    syncTimeoutRef.current = setTimeout(async () => {
-      const currentState = JSON.stringify(getLocalState());
-      if (currentState !== lastPushedRef.current) {
-        console.log('[Sync] Detectada mudança, fazendo push...');
-        lastPushedRef.current = currentState;
-        await pushToBackend();
-      }
-    }, 500); // Debounce de 500ms para evitar múltiplos PUTs rapidamente
-  };
 
   useEffect(() => {
+    // Interceptar setItem para fazer push imediato
+    interceptSetItem();
+
     let intervalId: ReturnType<typeof setInterval>;
 
     async function initialize() {
@@ -82,28 +102,28 @@ export function useBackendSync() {
         const hasServerData = Array.isArray(serverLeads) && serverLeads.length > 0;
 
         if (hasServerData && !hasLocalData) {
-          // Servidor tem dados, local vazio → importa
+          // Servidor tem dados, local vazio → importa sem disparar setItem hook
           console.log('[Sync] Importando dados do servidor...');
           for (const key of SYNC_KEYS) {
-            if (serverState[key]) localStorage.setItem(key, JSON.stringify(serverState[key]));
+            if (serverState[key]) originalSetItem(key, JSON.stringify(serverState[key]));
           }
           window.location.reload();
           return;
         }
       }
 
-      // Envia dados locais imediatamente
+      // Envia dados locais imediatamente na inicialização
       if (hasLocalData) {
         console.log('[Sync] Push inicial de dados locais...');
         await pushToBackend();
         lastPushedRef.current = JSON.stringify(getLocalState());
       }
 
-      // Polling: push sempre que localStorage mudar (fallback para storage events)
+      // Polling: fallback para garantir sincronização mesmo se houver falhas
       intervalId = setInterval(async () => {
         const currentState = JSON.stringify(getLocalState());
         if (currentState !== lastPushedRef.current) {
-          console.log('[Sync] Polling detectou mudança');
+          console.log('[Sync] Polling detectou mudança (fallback)');
           lastPushedRef.current = currentState;
           await pushToBackend();
         }
@@ -111,13 +131,6 @@ export function useBackendSync() {
     }
 
     initialize();
-
-    // Handler para mudanças no localStorage (dispara quando outra aba modifica)
-    const onStorageChange = () => {
-      console.log('[Sync] Storage mudou (outra aba ou window.localStorage.setItem)');
-      debouncedPush();
-    };
-    window.addEventListener('storage', onStorageChange);
 
     // Ao ganhar foco: verifica se outro browser salvou dados mais recentes
     const onFocus = async () => {
@@ -131,7 +144,7 @@ export function useBackendSync() {
       if (serverJson.length > localJson.length) {
         console.log('[Sync] Window ganhou foco, atualizando do servidor...');
         for (const key of SYNC_KEYS) {
-          if (serverState[key]) localStorage.setItem(key, JSON.stringify(serverState[key]));
+          if (serverState[key]) originalSetItem(key, JSON.stringify(serverState[key]));
         }
         window.location.reload();
       }
@@ -140,8 +153,7 @@ export function useBackendSync() {
 
     return () => {
       clearInterval(intervalId);
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-      window.removeEventListener('storage', onStorageChange);
+      if (syncTimeoutId) clearTimeout(syncTimeoutId);
       window.removeEventListener('focus', onFocus);
     };
   }, []);
