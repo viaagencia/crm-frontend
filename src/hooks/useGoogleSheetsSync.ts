@@ -103,6 +103,7 @@ export function useGoogleSheetsSync() {
       }
 
       // ── 2. Importar da planilha leads que ainda não estão no CRM ──────
+      // MAS: se o lead já existe, NÃO sobrescrever tarefas, atividades, anotações
       const phonesNocrm = new Set([
         ...crm.leads.map(l => l.telefone.replace(/\D/g, '')),
         ...crm.pacientes.map(p => p.telefone.replace(/\D/g, '')),
@@ -116,10 +117,24 @@ export function useGoogleSheetsSync() {
         if (!telefone) continue;
         const cleanPhone = telefone.replace(/\D/g, '');
 
-        // Ignora blacklist e duplicatas
+        // Ignora blacklist
         if (blacklist.has(cleanPhone)) continue;
-        if (phonesNocrm.has(cleanPhone)) continue;
 
+        // Se lead já existe no CRM, apenas atualizar nome/email/origem (preservando tarefas/atividades)
+        if (phonesNocrm.has(cleanPhone)) {
+          const existingLead = crm.leads.find(l => l.telefone.replace(/\D/g, '') === cleanPhone);
+          if (existingLead) {
+            // Atualizar APENAS os campos da planilha, preservar tarefas/atividades/anotações
+            crm.updateLead(existingLead.id, {
+              nome: nome || existingLead.nome,
+              email: String(item.email ?? '') || existingLead.email,
+              origem: origem || existingLead.origem,
+            });
+          }
+          continue;
+        }
+
+        // Se lead NÃO existe, importar novo
         crm.addLead({
           nome: nome || 'Lead importado',
           telefone,
