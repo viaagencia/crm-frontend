@@ -91,12 +91,35 @@ export function useBackendSync() {
     let intervalId: ReturnType<typeof setInterval>;
 
     async function initialize() {
-      // Fazer um push inicial de qualquer dado local
       const localState = getLocalState();
-      if (Object.keys(localState).length > 0) {
+      const hasLocalData = Object.keys(localState).length > 0;
+
+      if (hasLocalData) {
+        // Se há dados locais, fazer push inicial
         console.log('[Sync] Push inicial de dados locais...');
         await pushToBackend();
         lastPushedRef.current = JSON.stringify(localState);
+      } else {
+        // Se localStorage está vazio, PUXAR do backend!
+        console.log('[Sync] localStorage vazio, puxando dados do backend...');
+        const backendState = await pullFromBackend();
+        if (backendState && Object.keys(backendState).length > 0) {
+          console.log('[Sync] ✅ Dados carregados do backend para localStorage');
+          // Restaurar dados do backend para localStorage
+          for (const [key, value] of Object.entries(backendState)) {
+            try {
+              localStorage.setItem(key, JSON.stringify(value));
+            } catch (e) {
+              console.error(`[Sync] Erro ao salvar ${key} em localStorage:`, e);
+            }
+          }
+          lastPushedRef.current = JSON.stringify(backendState);
+          // Forçar reload da página para que dados apareçam na UI
+          window.location.reload();
+          return;
+        } else {
+          console.log('[Sync] Backend também vazio, usando dados padrão');
+        }
       }
 
       // Polling: fallback para garantir sincronização mesmo se houver falhas
