@@ -4,7 +4,7 @@ import { Lead, Paciente, Coluna, Pipeline, Agendamento, Orcamento, PIPELINE_PADR
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 // Função auxiliar para persistir em localStorage
-function persistToLocalStorage(key: 'crm-leads' | 'crm-pacientes' | 'crm-agendamentos' | 'crm-orcamentos', data: any) {
+function persistToLocalStorage(key: 'crm-leads' | 'crm-pacientes' | 'crm-agendamentos' | 'crm-orcamentos' | 'crm-pipelines', data: any) {
   localStorage.setItem(key, JSON.stringify(data));
 }
 
@@ -19,7 +19,9 @@ function loadFromLocalStorage<T>(key: string, defaultValue: T[]): T[] {
 }
 
 export function useCrmData() {
-  const [pipelines, setPipelines] = useState<Pipeline[]>([PIPELINE_PADRAO]);
+  const [pipelines, setPipelines] = useState<Pipeline[]>(() =>
+    loadFromLocalStorage('crm-pipelines', [PIPELINE_PADRAO])
+  );
   const [colunasPacientes] = useState<Coluna[]>(COLUNAS_PACIENTES_PADRAO);
   const [leads, setLeads] = useState<Lead[]>(() => loadFromLocalStorage('crm-leads', []));
   const [pacientes, setPacientes] = useState<Paciente[]>(() => loadFromLocalStorage('crm-pacientes', []));
@@ -37,6 +39,7 @@ export function useCrmData() {
       if (res.ok) {
         const data = await res.json();
         if (data && data.length > 0) {
+          // Converter dados do backend
           const converted = data.map((f: any) => ({
             id: f.id,
             nome: f.name,
@@ -47,7 +50,21 @@ export function useCrmData() {
             ],
             criadoEm: f.created_at,
           }));
-          setPipelines(converted);
+
+          // MERGE inteligente ao invés de SUBSTITUIR:
+          // - Manter pipelines locais que ainda não estão no backend
+          // - Adicionar/atualizar pipelines do backend
+          setPipelines((currentPipelines) => {
+            // IDs que vêm do backend
+            const backendIds = new Set(converted.map(p => p.id));
+
+            // Manter pipelines locais que NÃO estão no backend
+            // (ex: Pipeline Principal que não foi criado via API)
+            const localOnly = currentPipelines.filter(p => !backendIds.has(p.id));
+
+            // Mesclar: pipelines do backend + pipelines locais que não estão lá
+            return [...converted, ...localOnly];
+          });
         }
       }
     } catch (err) {
@@ -75,7 +92,9 @@ export function useCrmData() {
           ],
           criadoEm: newFunnel.created_at || new Date().toISOString(),
         };
-        setPipelines(p => [...p, newPipeline]);
+        const newPipelines = [...pipelines, newPipeline];
+        setPipelines(newPipelines);
+        persistToLocalStorage('crm-pipelines', newPipelines);
         return newPipeline;
       }
     } catch (err) {
@@ -91,7 +110,9 @@ export function useCrmData() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: updates.nome })
       });
-      setPipelines(p => p.map(x => x.id === id ? { ...x, ...updates } : x));
+      const newPipelines = pipelines.map(x => x.id === id ? { ...x, ...updates } : x);
+      setPipelines(newPipelines);
+      persistToLocalStorage('crm-pipelines', newPipelines);
     } catch (err) {
       console.error('Erro ao atualizar funil:', err);
     }
@@ -100,7 +121,9 @@ export function useCrmData() {
   const deletePipeline = async (id: string) => {
     try {
       await fetch(`${API_URL}/api/funnels/${id}`, { method: 'DELETE' });
-      setPipelines(p => p.filter(x => x.id !== id));
+      const newPipelines = pipelines.filter(x => x.id !== id);
+      setPipelines(newPipelines);
+      persistToLocalStorage('crm-pipelines', newPipelines);
     } catch (err) {
       console.error('Erro ao deletar funil:', err);
     }
