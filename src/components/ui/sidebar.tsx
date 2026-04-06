@@ -33,6 +33,18 @@ export function SidebarMenuButton({ children, className = '' }: { children: Reac
   );
 }
 
+export function SidebarGroup({ children }: { children: React.ReactNode }) {
+  return <div className="mb-4">{children}</div>;
+}
+
+export function SidebarGroupLabel({ children }: { children: React.ReactNode }) {
+  return <div className="text-xs font-semibold text-gray-400 uppercase px-3 py-2">{children}</div>;
+}
+
+export function SidebarGroupContent({ children }: { children: React.ReactNode }) {
+  return <div>{children}</div>;
+}
+
 export function useSidebar() {
   const [isOpen, setIsOpen] = useState(true);
 
