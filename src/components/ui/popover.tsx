@@ -1,41 +1,56 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, createContext, useContext } from 'react';
+
+interface PopoverContextType {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}
+
+const PopoverContext = createContext<PopoverContextType | undefined>(undefined);
 
 export interface PopoverProps {
-  trigger: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   children: React.ReactNode;
 }
 
-export function Popover({ trigger, children }: PopoverProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const triggerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+export function Popover({ open: controlledOpen, onOpenChange, children }: PopoverProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isOpen = controlledOpen !== undefined ? controlledOpen : uncontrolledOpen;
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (triggerRef.current && contentRef.current &&
-          !triggerRef.current.contains(event.target as Node) &&
-          !contentRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+  const setOpen = (newOpen: boolean) => {
+    if (controlledOpen === undefined) {
+      setUncontrolledOpen(newOpen);
     }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    onOpenChange?.(newOpen);
+  };
 
   return (
-    <div className="relative">
-      <div ref={triggerRef} onClick={() => setIsOpen(!isOpen)}>
-        {trigger}
+    <PopoverContext.Provider value={{ open: isOpen, setOpen }}>
+      <div className="relative">
+        {children}
       </div>
-      {isOpen && (
-        <div
-          ref={contentRef}
-          className="absolute top-full left-0 mt-2 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4 min-w-[200px]"
-        >
-          {children}
-        </div>
-      )}
+    </PopoverContext.Provider>
+  );
+}
+
+export function PopoverTrigger({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  const context = useContext(PopoverContext);
+  if (!context) return null;
+
+  return (
+    <button onClick={() => context.setOpen(!context.open)} className={className}>
+      {children}
+    </button>
+  );
+}
+
+export function PopoverContent({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  const context = useContext(PopoverContext);
+  if (!context || !context.open) return null;
+
+  return (
+    <div className={`absolute top-full left-0 mt-2 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4 min-w-[200px] ${className}`}>
+      {children}
     </div>
   );
 }

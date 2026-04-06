@@ -4,3 +4,4 @@ export function DialogContent(props: any) { return <div {...props} style={{backg
 export function DialogHeader(props: any) { return <div {...props} />; }
 export function DialogTitle(props: any) { return <h2 {...props} />; }
 export function DialogDescription(props: any) { return <p {...props} />; }
+export function DialogFooter(props: any) { return <div {...props} />; }
