@@ -45,3 +45,11 @@ export function SheetContent({ children, onClose }: SheetContentProps) {
     </div>
   );
 }
+
+export function SheetHeader({ children }: { children: React.ReactNode }) {
+  return <div className="mb-4">{children}</div>;
+}
+
+export function SheetTitle({ children }: { children: React.ReactNode }) {
+  return <h2 className="text-lg font-semibold">{children}</h2>;
+}
