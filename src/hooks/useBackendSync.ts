@@ -114,6 +114,8 @@ export function useBackendSync() {
             }
           }
           lastPushedRef.current = JSON.stringify(backendState);
+          // Disparar evento customizado para notificar que dados foram carregados do backend
+          window.dispatchEvent(new CustomEvent('crmDataLoadedFromBackend', { detail: backendState }));
           // Forçar reload da página para que dados apareçam na UI
           window.location.reload();
           return;

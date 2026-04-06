@@ -2,10 +2,13 @@
  * PHONE-BASED SYNC HOOK
  *
  * Sincroniza tarefas, atividades e anotações baseado no número de telefone.
+ * CRÍTICO: Sempre que um lead/paciente com aquele número de telefone aparece no CRM,
+ * ele AUTOMATICAMENTE carrega todas as tarefas, atividades e anotações do banco de dados.
+ *
  * Isso permite que dados persistam mesmo quando leads são reimportados da Google Sheets.
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://darksalmon-viper-304874.hostingersite.com';
@@ -34,6 +37,9 @@ interface AnotacaoAPI {
 
 export function usePhoneBasedSync() {
   const crm = useCrm();
+  // Manter track global de quais telefones já foram sincronizados
+  // para evitar re-syncs desnecessários
+  const syncedPhonesRef = useRef<Set<string>>(new Set());
 
   // Buscar tarefas/atividades/anotações do backend usando telefone
   const loadDataForContact = useCallback(async (telefone: string) => {
@@ -41,6 +47,7 @@ export function usePhoneBasedSync() {
 
     try {
       const cleanPhone = telefone.replace(/\D/g, '');
+      console.log(`[PhoneBasedSync] Buscando dados para telefone: ${cleanPhone}`);
 
       // Buscar dados em paralelo
       const [tarefasRes, atividadesRes, anotacoesRes] = await Promise.all([
@@ -53,6 +60,8 @@ export function usePhoneBasedSync() {
       const atividades = atividadesRes.ok ? await atividadesRes.json() : [];
       const anotacoes = anotacoesRes.ok ? await anotacoesRes.json() : [];
 
+      console.log(`[PhoneBasedSync] ✅ Encontrou ${tarefas.length} tarefas, ${atividades.length} atividades, ${anotacoes.length} anotações`);
+
       return { tarefas, atividades, anotacoes };
     } catch (error) {
       console.error('[PhoneBasedSync] Erro ao buscar dados:', error);
@@ -60,60 +69,114 @@ export function usePhoneBasedSync() {
     }
   }, []);
 
-  // Quando um lead é carregado, buscar todas as suas tarefas/atividades por telefone
-  // e atualizar o lead com esses dados
-  const enrichLeadWithPhoneData = useCallback(async (leadId: string) => {
+  // Sincronizar um lead específico: busca dados por telefone e SEMPRE atualiza
+  const syncLeadByPhone = useCallback(async (leadId: string) => {
     const lead = crm.leads.find(l => l.id === leadId);
-    if (!lead) return;
+    if (!lead || !lead.telefone) return;
 
+    const cleanPhone = lead.telefone.replace(/\D/g, '');
+
+    // Se já sincronizou este telefone NESTA SESSÃO, não sincroniza novamente
+    if (syncedPhonesRef.current.has(cleanPhone)) {
+      console.log(`[PhoneBasedSync] Lead ${leadId} com telefone ${cleanPhone} já sincronizado nesta sessão`);
+      return;
+    }
+
+    console.log(`[PhoneBasedSync] 🔄 Sincronizando lead ${leadId} com telefone ${cleanPhone}...`);
     const { tarefas, atividades, anotacoes } = await loadDataForContact(lead.telefone);
 
-    // Atualizar o lead com os dados buscados do backend
-    if (tarefas.length > 0 || atividades.length > 0 || anotacoes.length > 0) {
-      crm.updateLead(leadId, {
-        tarefas: tarefas as any,
-        atividades: atividades as any,
-        anotacoes: anotacoes as any,
-      });
-    }
+    // SEMPRE atualizar, mesmo que esteja vazio (garante que sincronizou)
+    crm.updateLead(leadId, {
+      tarefas: tarefas as any,
+      atividades: atividades as any,
+      anotacoes: anotacoes as any,
+    });
+
+    syncedPhonesRef.current.add(cleanPhone);
   }, [crm, loadDataForContact]);
 
-  // Quando um paciente é carregado, fazer o mesmo
-  const enrichPacienteWithPhoneData = useCallback(async (pacienteId: string) => {
+  // Sincronizar um paciente específico: busca dados por telefone e SEMPRE atualiza
+  const syncPacienteByPhone = useCallback(async (pacienteId: string) => {
     const paciente = crm.pacientes.find(p => p.id === pacienteId);
-    if (!paciente) return;
+    if (!paciente || !paciente.telefone) return;
 
+    const cleanPhone = paciente.telefone.replace(/\D/g, '');
+
+    if (syncedPhonesRef.current.has(cleanPhone)) {
+      console.log(`[PhoneBasedSync] Paciente ${pacienteId} com telefone ${cleanPhone} já sincronizado nesta sessão`);
+      return;
+    }
+
+    console.log(`[PhoneBasedSync] 🔄 Sincronizando paciente ${pacienteId} com telefone ${cleanPhone}...`);
     const { tarefas, atividades, anotacoes } = await loadDataForContact(paciente.telefone);
 
-    if (tarefas.length > 0 || atividades.length > 0 || anotacoes.length > 0) {
-      crm.updatePaciente(pacienteId, {
-        tarefas: tarefas as any,
-        atividades: atividades as any,
-        anotacoes: anotacoes as any,
-      });
-    }
+    crm.updatePaciente(pacienteId, {
+      tarefas: tarefas as any,
+      atividades: atividades as any,
+      anotacoes: anotacoes as any,
+    });
+
+    syncedPhonesRef.current.add(cleanPhone);
   }, [crm, loadDataForContact]);
 
-  // Ao montar o hook, enriquecer TODOS os leads e pacientes com dados do backend
+  // Sincronizar TODOS os leads e pacientes
+  const syncAll = useCallback(async () => {
+    console.log('[PhoneBasedSync] 🌍 Sincronizando TODOS os leads e pacientes...');
+
+    // Sincronizar todos os leads
+    const leadPromises = crm.leads.map(lead => syncLeadByPhone(lead.id));
+    await Promise.all(leadPromises);
+
+    // Sincronizar todos os pacientes
+    const pacientePromises = crm.pacientes.map(p => syncPacienteByPhone(p.id));
+    await Promise.all(pacientePromises);
+
+    console.log('[PhoneBasedSync] ✅ Sincronização completa! Telefones únicos sincronizados:', syncedPhonesRef.current.size);
+  }, [crm.leads, crm.pacientes, syncLeadByPhone, syncPacienteByPhone]);
+
+  // CRITICAL: Sincronizar quando o componente monta (primeiro carregamento)
   useEffect(() => {
-    const enrichAll = async () => {
-      // Enriquecer todos os leads em paralelo
-      for (const lead of crm.leads) {
-        await enrichLeadWithPhoneData(lead.id);
-      }
+    console.log('[PhoneBasedSync] 🚀 Hook montado, sincronizando dados do backend...');
+    syncAll();
+  }, []); // Roda UMA VEZ ao montar
 
-      // Enriquecer todos os pacientes em paralelo
-      for (const paciente of crm.pacientes) {
-        await enrichPacienteWithPhoneData(paciente.id);
-      }
-    };
+  // CRITICAL: Sincronizar quando NOVOS leads/pacientes são adicionados
+  // (mudança no tamanho da lista significa que alguma coisa foi adicionada)
+  useEffect(() => {
+    // Detectar novos leads comparando com o tamanho anterior
+    const currentLeadIds = new Set(crm.leads.map(l => l.id));
+    const prevLeadIds = useRef<Set<string>>(currentLeadIds);
 
-    enrichAll();
-  }, [crm.leads.length, crm.pacientes.length, enrichLeadWithPhoneData, enrichPacienteWithPhoneData]);
+    // Sincronizar apenas os leads que são novos
+    for (const lead of crm.leads) {
+      if (!prevLeadIds.current.has(lead.id)) {
+        console.log(`[PhoneBasedSync] 🆕 Novo lead detectado, sincronizando: ${lead.id}`);
+        syncLeadByPhone(lead.id);
+      }
+    }
+
+    prevLeadIds.current = currentLeadIds;
+  }, [crm.leads.length, syncLeadByPhone]); // Roda quando leads mudam
+
+  useEffect(() => {
+    // Detectar novos pacientes
+    const currentPacienteIds = new Set(crm.pacientes.map(p => p.id));
+    const prevPacienteIds = useRef<Set<string>>(currentPacienteIds);
+
+    for (const paciente of crm.pacientes) {
+      if (!prevPacienteIds.current.has(paciente.id)) {
+        console.log(`[PhoneBasedSync] 🆕 Novo paciente detectado, sincronizando: ${paciente.id}`);
+        syncPacienteByPhone(paciente.id);
+      }
+    }
+
+    prevPacienteIds.current = currentPacienteIds;
+  }, [crm.pacientes.length, syncPacienteByPhone]); // Roda quando pacientes mudam
 
   return {
     loadDataForContact,
-    enrichLeadWithPhoneData,
-    enrichPacienteWithPhoneData,
+    syncLeadByPhone,
+    syncPacienteByPhone,
+    syncAll,
   };
 }
