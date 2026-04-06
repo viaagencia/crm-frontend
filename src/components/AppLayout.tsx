@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { useCrm } from "@/contexts/CrmContext";
 import { useGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
 import { useBackendSync } from "@/hooks/useBackendSync";
+import { usePhoneBasedSync } from "@/hooks/usePhoneBasedSync";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const crm = useCrm();
   const { syncNow, isSyncing } = useGoogleSheetsSync();
   useBackendSync(); // Sincroniza com MySQL para persistência entre navegadores
+  usePhoneBasedSync(); // Carrega tarefas/atividades/anotações baseado no telefone do lead
 
   return (
     <SidebarProvider>
