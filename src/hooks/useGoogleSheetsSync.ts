@@ -106,9 +106,12 @@ export function useGoogleSheetsSync() {
           // Estava no CRM mas sumiu da planilha → apagar do CRM
           // Só apaga se o número já esteve na planilha (ou seja, foi importado dela)
           // Verifica se veio da planilha pela origem (qualquer origem != criação manual vazia)
+          console.log(`[GoogleSheets] Deletando lead que sumiu da planilha: ${lead.nome} (${cleanTel})`);
           crm.deleteLead(lead.id);
         }
       }
+
+      console.log(`[GoogleSheets] 📊 Números na planilha: ${numerosNaPlanilha.size}, Leads no CRM: ${crm.leads.length}`);
 
       // ── 2. Importar da planilha leads que ainda não estão no CRM ──────
       // MAS: se o lead já existe, NÃO sobrescrever tarefas, atividades, anotações
@@ -128,21 +131,33 @@ export function useGoogleSheetsSync() {
         // Ignora blacklist
         if (blacklist.has(cleanPhone)) continue;
 
-        // Se lead já existe no CRM, apenas atualizar nome/email/origem (preservando tarefas/atividades)
+        // Se lead ou paciente já existe no CRM, apenas atualizar nome/email/origem (preservando tarefas/atividades)
         if (phonesNocrm.has(cleanPhone)) {
           const existingLead = crm.leads.find(l => l.telefone.replace(/\D/g, '') === cleanPhone);
+          const existingPaciente = crm.pacientes.find(p => p.telefone.replace(/\D/g, '') === cleanPhone);
+
           if (existingLead) {
             // Atualizar APENAS os campos da planilha, preservar tarefas/atividades/anotações
+            console.log(`[GoogleSheets] Atualizando lead existente: ${nome} (${cleanPhone})`);
             crm.updateLead(existingLead.id, {
               nome: nome || existingLead.nome,
               email: String(item.email ?? '') || existingLead.email,
               origem: origem || existingLead.origem,
+            });
+          } else if (existingPaciente) {
+            // Também atualizar pacientes com cuidado
+            console.log(`[GoogleSheets] Atualizando paciente existente: ${nome} (${cleanPhone})`);
+            crm.updatePaciente(existingPaciente.id, {
+              nome: nome || existingPaciente.nome,
+              email: String(item.email ?? '') || existingPaciente.email,
+              origem: origem || existingPaciente.origem,
             });
           }
           continue;
         }
 
         // Se lead NÃO existe, importar novo
+        console.log(`[GoogleSheets] Importando novo lead: ${nome} (${cleanPhone})`);
         crm.addLead({
           nome: nome || 'Lead importado',
           telefone,
