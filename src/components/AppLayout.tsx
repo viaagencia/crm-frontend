@@ -4,10 +4,12 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCrm } from "@/contexts/CrmContext";
 import { useGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
+import { useBackendSync } from "@/hooks/useBackendSync";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const crm = useCrm();
   const { syncNow, isSyncing } = useGoogleSheetsSync();
+  useBackendSync(); // Sincroniza com MySQL para persistência entre navegadores
 
   return (
     <SidebarProvider>
