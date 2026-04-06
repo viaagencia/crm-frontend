@@ -46,7 +46,13 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
 
   // Sincronizar na inicialização e periodicamente
   useEffect(() => {
-    if (!usuarioId) return;
+    if (!usuarioId) {
+      console.log('❌ usuarioId não definido ainda');
+      return;
+    }
+
+    console.log('✓ Iniciando sincronização com usuarioId:', usuarioId);
+    console.log('📡 API URL:', import.meta.env.VITE_API_URL);
 
     // Sincronizar imediatamente
     syncWithBackend();
