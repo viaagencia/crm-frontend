@@ -3,6 +3,11 @@ import { Lead, Paciente, Coluna, Pipeline, Agendamento, Orcamento, PIPELINE_PADR
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+// Função auxiliar para persistir em localStorage
+function persistToLocalStorage(key: 'crm-leads' | 'crm-pacientes' | 'crm-agendamentos' | 'crm-orcamentos', data: any) {
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
 export function useCrmData() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([PIPELINE_PADRAO]);
   const [colunasPacientes] = useState<Coluna[]>(COLUNAS_PACIENTES_PADRAO);
@@ -102,16 +107,22 @@ export function useCrmData() {
       orcamentos: [],
       atividades: [],
     };
-    setLeads(p => [...p, newLead]);
+    const newLeads = [...leads, newLead];
+    setLeads(newLeads);
+    persistToLocalStorage('crm-leads', newLeads);
     return newLead;
   };
 
   const updateLead = (id: string, updates: Partial<Lead>) => {
-    setLeads(p => p.map(l => l.id === id ? { ...l, ...updates } : l));
+    const newLeads = leads.map(l => l.id === id ? { ...l, ...updates } : l);
+    setLeads(newLeads);
+    persistToLocalStorage('crm-leads', newLeads);
   };
 
   const deleteLead = (id: string) => {
-    setLeads(p => p.filter(l => l.id !== id));
+    const newLeads = leads.filter(l => l.id !== id);
+    setLeads(newLeads);
+    persistToLocalStorage('crm-leads', newLeads);
   };
 
   const convertLeadToPaciente = (leadId: string, colunaId: string) => {
@@ -147,36 +158,50 @@ export function useCrmData() {
       orcamentos: [],
       atividades: [],
     };
-    setPacientes(p => [...p, newPaciente]);
+    const newPacientes = [...pacientes, newPaciente];
+    setPacientes(newPacientes);
+    persistToLocalStorage('crm-pacientes', newPacientes);
     return newPaciente;
   };
 
   const updatePaciente = (id: string, updates: Partial<Paciente>) => {
-    setPacientes(p => p.map(x => x.id === id ? { ...x, ...updates } : x));
+    const newPacientes = pacientes.map(x => x.id === id ? { ...x, ...updates } : x);
+    setPacientes(newPacientes);
+    persistToLocalStorage('crm-pacientes', newPacientes);
   };
 
   const deletePaciente = (id: string) => {
-    setPacientes(p => p.filter(x => x.id !== id));
+    const newPacientes = pacientes.filter(x => x.id !== id);
+    setPacientes(newPacientes);
+    persistToLocalStorage('crm-pacientes', newPacientes);
   };
 
   const addAgendamento = (ag: any) => {
     const newAg: Agendamento = { ...ag, id: crypto.randomUUID() };
-    setAgendamentos(p => [...p, newAg]);
+    const newAgendamentos = [...agendamentos, newAg];
+    setAgendamentos(newAgendamentos);
+    persistToLocalStorage('crm-agendamentos', newAgendamentos);
     return newAg;
   };
 
   const updateAgendamento = (id: string, updates: Partial<Agendamento>) => {
-    setAgendamentos(p => p.map(a => a.id === id ? { ...a, ...updates } : a));
+    const newAgendamentos = agendamentos.map(a => a.id === id ? { ...a, ...updates } : a);
+    setAgendamentos(newAgendamentos);
+    persistToLocalStorage('crm-agendamentos', newAgendamentos);
   };
 
   const addOrcamento = (orc: any) => {
     const newOrc: Orcamento = { ...orc, id: crypto.randomUUID(), criadoEm: new Date().toISOString() };
-    setOrcamentos(p => [...p, newOrc]);
+    const newOrcamentos = [...orcamentos, newOrc];
+    setOrcamentos(newOrcamentos);
+    persistToLocalStorage('crm-orcamentos', newOrcamentos);
     return newOrc;
   };
 
   const updateOrcamento = (id: string, updates: Partial<Orcamento>) => {
-    setOrcamentos(p => p.map(o => o.id === id ? { ...o, ...updates } : o));
+    const newOrcamentos = orcamentos.map(o => o.id === id ? { ...o, ...updates } : o);
+    setOrcamentos(newOrcamentos);
+    persistToLocalStorage('crm-orcamentos', newOrcamentos);
   };
 
   return {
