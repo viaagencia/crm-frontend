@@ -8,13 +8,23 @@ function persistToLocalStorage(key: 'crm-leads' | 'crm-pacientes' | 'crm-agendam
   localStorage.setItem(key, JSON.stringify(data));
 }
 
+// Helper to load from localStorage
+function loadFromLocalStorage<T>(key: string, defaultValue: T[]): T[] {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : defaultValue;
+  } catch {
+    return defaultValue;
+  }
+}
+
 export function useCrmData() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([PIPELINE_PADRAO]);
   const [colunasPacientes] = useState<Coluna[]>(COLUNAS_PACIENTES_PADRAO);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [pacientes, setPacientes] = useState<Paciente[]>([]);
-  const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
-  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
+  const [leads, setLeads] = useState<Lead[]>(() => loadFromLocalStorage('crm-leads', []));
+  const [pacientes, setPacientes] = useState<Paciente[]>(() => loadFromLocalStorage('crm-pacientes', []));
+  const [agendamentos, setAgendamentos] = useState<Agendamento[]>(() => loadFromLocalStorage('crm-agendamentos', []));
+  const [orcamentos, setOrcamentos] = useState<Orcamento[]>(() => loadFromLocalStorage('crm-orcamentos', []));
 
   // Carregar funis do backend quando montar
   useEffect(() => {
