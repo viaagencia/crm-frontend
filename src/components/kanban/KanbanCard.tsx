@@ -1,5 +1,3 @@
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { Card } from '@/components/ui/card';
 import { Phone, Calendar } from 'lucide-react';
 import { format, isToday, isPast } from 'date-fns';

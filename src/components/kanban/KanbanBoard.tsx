@@ -10,11 +10,9 @@ import {
   type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent,
-} from '@dnd-kit/core';
 import {
   SortableContext,
   horizontalListSortingStrategy,
-} from '@dnd-kit/sortable';
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanCard } from './KanbanCard';
 import { Coluna, Tarefa } from '@/types/crm';
