@@ -19,6 +19,8 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { apagarLeadDaSheets } from '@/hooks/useGoogleSheetsSync';
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://darksalmon-viper-304874.hostingersite.com';
+
 interface ContatoDetailProps {
   contato: (Lead | Paciente) | null;
   open: boolean;
@@ -82,6 +84,79 @@ export function ContatoDetail({
     toast.success('Lead atualizado com sucesso!');
   };
 
+  // Enviar tarefa para backend
+  const enviarTarefaParaBD = async (tarefa: Tarefa) => {
+    try {
+      const payload = {
+        titulo: tarefa.titulo,
+        status: tarefa.status,
+        dataHora: tarefa.dataHora,
+        [tipo === 'lead' ? 'lead_id' : 'paciente_id']: contato.id,
+        telefone: contato.telefone.replace(/\D/g, ''),
+      };
+      const res = await fetch(`${API_URL}/api/tarefas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        console.log('[ContatoDetail] ✅ Tarefa salva no backend');
+      } else {
+        console.error('[ContatoDetail] Erro ao salvar tarefa:', res.status);
+      }
+    } catch (e) {
+      console.error('[ContatoDetail] Erro ao enviar tarefa:', e);
+    }
+  };
+
+  // Enviar atividade para backend
+  const enviarAtividadeParaBD = async (atividade: Atividade) => {
+    try {
+      const payload = {
+        tipo: atividade.tipo,
+        status: atividade.status,
+        observacao: atividade.observacao,
+        [tipo === 'lead' ? 'lead_id' : 'paciente_id']: contato.id,
+        telefone: contato.telefone.replace(/\D/g, ''),
+      };
+      const res = await fetch(`${API_URL}/api/atividades`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        console.log('[ContatoDetail] ✅ Atividade salva no backend');
+      } else {
+        console.error('[ContatoDetail] Erro ao salvar atividade:', res.status);
+      }
+    } catch (e) {
+      console.error('[ContatoDetail] Erro ao enviar atividade:', e);
+    }
+  };
+
+  // Enviar anotação para backend
+  const enviarAnotacaoParaBD = async (anotacao: Anotacao) => {
+    try {
+      const payload = {
+        texto: anotacao.texto,
+        [tipo === 'lead' ? 'lead_id' : 'paciente_id']: contato.id,
+        telefone: contato.telefone.replace(/\D/g, ''),
+      };
+      const res = await fetch(`${API_URL}/api/anotacoes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        console.log('[ContatoDetail] ✅ Anotação salva no backend');
+      } else {
+        console.error('[ContatoDetail] Erro ao salvar anotação:', res.status);
+      }
+    } catch (e) {
+      console.error('[ContatoDetail] Erro ao enviar anotação:', e);
+    }
+  };
+
   const addTask = () => {
     if (!newTask.trim()) return;
     const dataHora = newTaskData && newTaskHora ? `${newTaskData}T${newTaskHora}` : newTaskData || undefined;
@@ -93,6 +168,8 @@ export function ContatoDetail({
       criadoEm: new Date().toISOString(),
     };
     onUpdate(contato.id, { tarefas: [...contato.tarefas, task] });
+    // Enviar para backend
+    enviarTarefaParaBD(task);
     setNewTask('');
     setNewTaskData('');
     setNewTaskHora('');
@@ -113,6 +190,8 @@ export function ContatoDetail({
     if (!newNote.trim()) return;
     const note: Anotacao = { id: crypto.randomUUID(), texto: newNote.trim(), criadoEm: new Date().toISOString() };
     onUpdate(contato.id, { anotacoes: [...contato.anotacoes, note] });
+    // Enviar para backend
+    enviarAnotacaoParaBD(note);
     setNewNote('');
   };
 
@@ -134,7 +213,10 @@ export function ContatoDetail({
       criadoEm: new Date().toISOString(),
     };
     onUpdate(contato.id, { atividades: [...atividades, novaAtividade] });
+    // Enviar para backend
+    enviarAtividadeParaBD(novaAtividade);
     setAtividadeObs('');
+    toast.success('Atividade registrada!');
   };
 
   const handleDelete = () => {
