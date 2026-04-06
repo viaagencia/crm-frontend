@@ -6,12 +6,14 @@ import { useCrm } from "@/contexts/CrmContext";
 import { useGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
 import { useBackendSync } from "@/hooks/useBackendSync";
 import { usePhoneBasedSync } from "@/hooks/usePhoneBasedSync";
+import { usePeriodicPhoneSync } from "@/hooks/usePeriodicPhoneSync";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const crm = useCrm();
   const { syncNow, isSyncing } = useGoogleSheetsSync();
   useBackendSync(); // Sincroniza com MySQL para persistência entre navegadores
   usePhoneBasedSync(); // Carrega tarefas/atividades/anotações baseado no telefone do lead
+  usePeriodicPhoneSync({ interval: 5 * 60 * 1000 }); // Sincroniza a cada 5 minutos
 
   return (
     <SidebarProvider>
