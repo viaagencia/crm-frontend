@@ -46,11 +46,26 @@ async function pullFromBackend(): Promise<Record<string, unknown> | null> {
 }
 
 /**
- * Sincroniza localStorage com MySQL a cada 8s via PUT/GET no backend.
- * Push quando detecta mudança; pull ao focar janela para pegar dados de outro browser.
+ * Sincroniza localStorage com MySQL via PUT/GET no backend.
+ * Detecta mudanças em TEMPO REAL via handler de storage events + polling de 8s.
+ * Push imediatamente quando detecta mudança; pull ao focar janela.
  */
 export function useBackendSync() {
   const lastPushedRef = useRef<string>('');
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Função auxiliar para fazer push com debounce
+  const debouncedPush = async () => {
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = setTimeout(async () => {
+      const currentState = JSON.stringify(getLocalState());
+      if (currentState !== lastPushedRef.current) {
+        console.log('[Sync] Detectada mudança, fazendo push...');
+        lastPushedRef.current = currentState;
+        await pushToBackend();
+      }
+    }, 500); // Debounce de 500ms para evitar múltiplos PUTs rapidamente
+  };
 
   useEffect(() => {
     let intervalId: ReturnType<typeof setInterval>;
@@ -68,6 +83,7 @@ export function useBackendSync() {
 
         if (hasServerData && !hasLocalData) {
           // Servidor tem dados, local vazio → importa
+          console.log('[Sync] Importando dados do servidor...');
           for (const key of SYNC_KEYS) {
             if (serverState[key]) localStorage.setItem(key, JSON.stringify(serverState[key]));
           }
@@ -78,14 +94,16 @@ export function useBackendSync() {
 
       // Envia dados locais imediatamente
       if (hasLocalData) {
+        console.log('[Sync] Push inicial de dados locais...');
         await pushToBackend();
         lastPushedRef.current = JSON.stringify(getLocalState());
       }
 
-      // Polling: push sempre que localStorage mudar
+      // Polling: push sempre que localStorage mudar (fallback para storage events)
       intervalId = setInterval(async () => {
         const currentState = JSON.stringify(getLocalState());
         if (currentState !== lastPushedRef.current) {
+          console.log('[Sync] Polling detectou mudança');
           lastPushedRef.current = currentState;
           await pushToBackend();
         }
@@ -93,6 +111,13 @@ export function useBackendSync() {
     }
 
     initialize();
+
+    // Handler para mudanças no localStorage (dispara quando outra aba modifica)
+    const onStorageChange = () => {
+      console.log('[Sync] Storage mudou (outra aba ou window.localStorage.setItem)');
+      debouncedPush();
+    };
+    window.addEventListener('storage', onStorageChange);
 
     // Ao ganhar foco: verifica se outro browser salvou dados mais recentes
     const onFocus = async () => {
@@ -104,6 +129,7 @@ export function useBackendSync() {
       const localJson = localStorage.getItem('crm-leads') || '[]';
 
       if (serverJson.length > localJson.length) {
+        console.log('[Sync] Window ganhou foco, atualizando do servidor...');
         for (const key of SYNC_KEYS) {
           if (serverState[key]) localStorage.setItem(key, JSON.stringify(serverState[key]));
         }
@@ -114,6 +140,8 @@ export function useBackendSync() {
 
     return () => {
       clearInterval(intervalId);
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      window.removeEventListener('storage', onStorageChange);
       window.removeEventListener('focus', onFocus);
     };
   }, []);
