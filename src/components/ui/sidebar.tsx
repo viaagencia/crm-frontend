@@ -54,3 +54,16 @@ export function useSidebar() {
     toggleSidebar: () => setIsOpen(!isOpen)
   };
 }
+
+export function SidebarProvider({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+
+export function SidebarTrigger({ className = '' }: { className?: string }) {
+  const { toggleSidebar } = useSidebar();
+  return (
+    <button onClick={toggleSidebar} className={`p-2 hover:bg-gray-100 rounded ${className}`}>
+      ☰
+    </button>
+  );
+}
