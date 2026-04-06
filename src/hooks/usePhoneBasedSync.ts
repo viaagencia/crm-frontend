@@ -137,41 +137,77 @@ export function usePhoneBasedSync() {
   // CRITICAL: Sincronizar quando o componente monta (primeiro carregamento)
   useEffect(() => {
     console.log('[PhoneBasedSync] 🚀 Hook montado, sincronizando dados do backend...');
+    // Limpar o cache de telefones sincronizados ao montar
+    // (garante que qualquer dado local seja sincronizado)
+    syncedPhonesRef.current.clear();
     syncAll();
   }, []); // Roda UMA VEZ ao montar
 
   // CRITICAL: Sincronizar quando NOVOS leads/pacientes são adicionados
   // (mudança no tamanho da lista significa que alguma coisa foi adicionada)
-  useEffect(() => {
-    // Detectar novos leads comparando com o tamanho anterior
-    const currentLeadIds = new Set(crm.leads.map(l => l.id));
-    const prevLeadIds = useRef<Set<string>>(currentLeadIds);
+  // Rastrear leads anteriores para detectar mudanças de telefone
+  const prevLeadsRef = useRef<Map<string, string>>(new Map()); // leadId -> telefone
 
-    // Sincronizar apenas os leads que são novos
+  useEffect(() => {
+    // Detectar novos leads E mudanças de telefone
     for (const lead of crm.leads) {
-      if (!prevLeadIds.current.has(lead.id)) {
+      const prevPhone = prevLeadsRef.current.get(lead.id);
+      const currentPhone = lead.telefone?.replace(/\D/g, '') || '';
+
+      if (!prevLeadsRef.current.has(lead.id)) {
+        // Lead NOVO
         console.log(`[PhoneBasedSync] 🆕 Novo lead detectado, sincronizando: ${lead.id}`);
         syncLeadByPhone(lead.id);
+      } else if (prevPhone !== currentPhone && prevPhone) {
+        // TELEFONE MUDOU - limpar cache do telefone antigo para forçar re-sync
+        console.log(`[PhoneBasedSync] 📱 Telefone mudou de ${prevPhone} para ${currentPhone}, limpando cache`);
+        syncedPhonesRef.current.delete(prevPhone);
+        syncLeadByPhone(lead.id);
       }
+
+      // Atualizar mapa de leads
+      prevLeadsRef.current.set(lead.id, currentPhone);
     }
 
-    prevLeadIds.current = currentLeadIds;
-  }, [crm.leads.length, syncLeadByPhone]); // Roda quando leads mudam
+    // Remover leads que foram deletados
+    for (const [leadId] of prevLeadsRef.current) {
+      if (!crm.leads.find(l => l.id === leadId)) {
+        prevLeadsRef.current.delete(leadId);
+      }
+    }
+  }, [crm.leads, syncLeadByPhone]); // Roda quando leads QUALQUER mudança
+
+  // Rastrear pacientes anteriores para detectar mudanças de telefone
+  const prevPacientesRef = useRef<Map<string, string>>(new Map()); // pacienteId -> telefone
 
   useEffect(() => {
-    // Detectar novos pacientes
-    const currentPacienteIds = new Set(crm.pacientes.map(p => p.id));
-    const prevPacienteIds = useRef<Set<string>>(currentPacienteIds);
-
+    // Detectar novos pacientes E mudanças de telefone
     for (const paciente of crm.pacientes) {
-      if (!prevPacienteIds.current.has(paciente.id)) {
+      const prevPhone = prevPacientesRef.current.get(paciente.id);
+      const currentPhone = paciente.telefone?.replace(/\D/g, '') || '';
+
+      if (!prevPacientesRef.current.has(paciente.id)) {
+        // Paciente NOVO
         console.log(`[PhoneBasedSync] 🆕 Novo paciente detectado, sincronizando: ${paciente.id}`);
         syncPacienteByPhone(paciente.id);
+      } else if (prevPhone !== currentPhone && prevPhone) {
+        // TELEFONE MUDOU - limpar cache do telefone antigo para forçar re-sync
+        console.log(`[PhoneBasedSync] 📱 Telefone do paciente mudou de ${prevPhone} para ${currentPhone}, limpando cache`);
+        syncedPhonesRef.current.delete(prevPhone);
+        syncPacienteByPhone(paciente.id);
       }
+
+      // Atualizar mapa de pacientes
+      prevPacientesRef.current.set(paciente.id, currentPhone);
     }
 
-    prevPacienteIds.current = currentPacienteIds;
-  }, [crm.pacientes.length, syncPacienteByPhone]); // Roda quando pacientes mudam
+    // Remover pacientes que foram deletados
+    for (const [pacienteId] of prevPacientesRef.current) {
+      if (!crm.pacientes.find(p => p.id === pacienteId)) {
+        prevPacientesRef.current.delete(pacienteId);
+      }
+    }
+  }, [crm.pacientes, syncPacienteByPhone]); // Roda quando pacientes QUALQUER mudança
 
   return {
     loadDataForContact,
