@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { UsersRound, CheckCircle, Clock } from 'lucide-react';
+import { Users, CheckCircle, Clock } from 'lucide-react';
 import AddMemberModal from '@/components/AddMemberModal';
 import supabase from '@/lib/supabase';
 
@@ -97,7 +97,7 @@ export default function EquipePage() {
           <p className="text-muted-foreground text-sm">Gerencie membros e permissões</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
-          <UsersRound className="h-4 w-4 mr-2" />
+          <Users className="h-4 w-4 mr-2" />
           Adicionar Membro
         </Button>
       </div>
@@ -120,7 +120,7 @@ export default function EquipePage() {
         /* Empty State */
         <Card className="border-dashed">
           <CardContent className="p-8 text-center">
-            <UsersRound className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
+            <Users className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
             <h3 className="font-medium text-foreground mb-1">Nenhum membro</h3>
             <p className="text-sm text-muted-foreground mb-4">
               Clique em "Adicionar Membro" para convidar o primeiro usuário

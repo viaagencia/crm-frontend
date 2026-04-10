@@ -4,7 +4,6 @@ import {
   UserCheck,
   Calendar,
   FileText,
-  UsersRound,
   Settings,
   Activity,
   ChevronDown,
@@ -40,7 +39,7 @@ const menuItemsBottom = [
   { title: "Agendamentos", url: "/agendamentos", icon: Calendar },
   { title: "Orçamentos", url: "/orcamentos", icon: FileText },
   { title: "Tarefas", url: "/tarefas", icon: CheckSquare },
-  { title: "Equipe", url: "/equipe", icon: UsersRound },
+  { title: "Equipe", url: "/equipe", icon: Users },
   { title: "Reativação", url: "/reativacao", icon: Activity },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ];
