@@ -1,0 +1,205 @@
+═══════════════════════════════════════════════════════════════════════
+    🚀 CHECKLIST DE DEPLOYMENT - viaclinic.site
+═══════════════════════════════════════════════════════════════════════
+
+FASE 1: PREPARAÇÃO LOCAL
+═══════════════════════════════════════════════════════════════════════
+
+VALIDAÇÃO DOS ARQUIVOS:
+
+✅ Arquivo: dist/index.html
+   Tamanho: 466 bytes
+   Caminhos:
+     - ✅ ./assets/index-DeWYvFcJ.js (relativo)
+     - ✅ ./assets/index-DyW2VobZ.css (relativo)
+
+✅ Arquivo: dist/.htaccess
+   Tamanho: 214 bytes
+   Contém:
+     - ✅ RewriteEngine On
+     - ✅ RewriteBase /
+     - ✅ Rewrite Rules para SPA
+
+✅ Arquivo: dist/assets/index-DeWYvFcJ.js
+   Tamanho: 1.6 MB
+   Tipo: JavaScript compilado
+
+✅ Arquivo: dist/assets/index-DyW2VobZ.css
+   Tamanho: 60 KB
+   Tipo: Tailwind CSS compilado
+
+✅ Estrutura:
+   dist/
+   ├── .htaccess
+   ├── index.html
+   └── assets/
+       ├── index-DeWYvFcJ.js
+       └── index-DyW2VobZ.css
+
+═══════════════════════════════════════════════════════════════════════
+
+FASE 2: PREPARAÇÃO NO HOSTINGER
+═══════════════════════════════════════════════════════════════════════
+
+PASSO 1: Acessar File Manager
+[ ] Acesse https://hpanel.hostinger.com/
+[ ] Faça login
+[ ] Clique em "File Manager"
+[ ] Navegue para: /home/[user]/domains/viaclinic.site/public_html/
+
+PASSO 2: Limpar Arquivos Antigos (⚠️ CRÍTICO)
+[ ] DELETE: index.html antigo
+[ ] DELETE: pasta assets/ antiga
+[ ] DELETE: .builds/ (se existir)
+[ ] DELETE: default.php (se existir)
+[ ] VERIFI​QUE: /public_html/ está limpo
+
+PASSO 3: Fazer Upload dos Arquivos
+[ ] Upload: index.html → /public_html/index.html
+[ ] Upload: .htaccess → /public_html/.htaccess
+[ ] Upload: assets/ → /public_html/assets/
+    [ ] Dentro de assets/:
+        [ ] index-DeWYvFcJ.js
+        [ ] index-DyW2VobZ.css
+
+PASSO 4: Verificar Permissões
+[ ] .htaccess: 644 ou 755
+[ ] index.html: 644
+[ ] assets/: 755
+[ ] Arquivos em assets/: 644
+
+PASSO 5: Limpar Cache
+[ ] No painel Hostinger → Settings
+[ ] Clique em "Clear Cache"
+[ ] Aguarde 1-2 minutos
+
+═══════════════════════════════════════════════════════════════════════
+
+FASE 3: VALIDAÇÃO NO SERVIDOR
+═══════════════════════════════════════════════════════════════════════
+
+VALIDAR ESTRUTURA EM /public_html:
+[ ] .htaccess existe?
+[ ] index.html existe?
+[ ] assets/ existe?
+[ ] index-DeWYvFcJ.js existe em assets/?
+[ ] index-DyW2VobZ.css existe em assets/?
+
+VALIDAR ARQUIVO SIZES:
+[ ] .htaccess: ~214 bytes
+[ ] index.html: ~466 bytes
+[ ] assets/index-DeWYvFcJ.js: ~1.6 MB
+[ ] assets/index-DyW2VobZ.css: ~60 KB
+
+═══════════════════════════════════════════════════════════════════════
+
+FASE 4: TESTE DE ACESSO
+═══════════════════════════════════════════════════════════════════════
+
+TESTE 1: Página Principal
+URL: https://viaclinic.site/
+[ ] Página carrega (sem erro 404)
+[ ] CSS está aplicado (interface estilizada)
+[ ] Tempo de carregamento: aceitável
+
+TESTE 2: React Funcionando
+[ ] Abra DevTools (F12)
+[ ] Console: Sem erros em vermelho
+[ ] Elements: Veja <div id="root"> com React
+[ ] Veja componentes React no HTML
+
+TESTE 3: Assets Carregados
+[ ] DevTools → Network
+[ ] Status 200 para:
+    [ ] index-DeWYvFcJ.js
+    [ ] index-DyW2VobZ.css
+[ ] Nenhum 404 nos assets
+
+TESTE 4: Navegação (React Router)
+[ ] Clique em link de navegação
+[ ] URL muda (ex: /agendamentos)
+[ ] Conteúdo muda
+[ ] Recarregue (F5)
+[ ] Página carrega (não quebra)
+
+TESTE 5: Rotas Específicas
+[ ] https://viaclinic.site/
+   [ ] Carrega OK
+   [ ] Sem 404
+[ ] https://viaclinic.site/agendamentos
+   [ ] Carrega OK
+   [ ] Sem 404
+[ ] https://viaclinic.site/leads
+   [ ] Carrega OK
+   [ ] Sem 404
+[ ] https://viaclinic.site/pacientes
+   [ ] Carrega OK
+   [ ] Sem 404
+[ ] https://viaclinic.site/perfil
+   [ ] Carrega OK
+   [ ] Sem 404
+
+TESTE 6: Autenticação
+[ ] Página de login aparece
+[ ] Login com email funciona
+[ ] Login com Google funciona
+[ ] Logout funciona
+
+═══════════════════════════════════════════════════════════════════════
+
+FASE 5: DIAGNÓSTICO (Se algo der errado)
+═══════════════════════════════════════════════════════════════════════
+
+❌ ERRO: Página em branco
+→ Verifique:
+  [ ] DevTools → Console tem erros?
+  [ ] Network: CSS/JS carregam com status 200?
+  [ ] Pasta assets/ existe em /public_html/?
+  [ ] Caminhos em index.html estão corretos?
+
+❌ ERRO: 404 em rotas
+→ Verifique:
+  [ ] .htaccess existe em /public_html/?
+  [ ] mod_rewrite está ativado no servidor?
+  [ ] Limpe cache do servidor
+  [ ] Verifique permissões do .htaccess (644)
+
+❌ ERRO: CSS não carregado
+→ Verifique:
+  [ ] Arquivo .css existe em assets/?
+  [ ] Caminho em index.html está correto?
+  [ ] Status 200 no Network (DevTools)
+  [ ] Tamanho do arquivo é ~60KB?
+
+❌ ERRO: JavaScript não funciona
+→ Verifique:
+  [ ] Arquivo .js existe em assets/?
+  [ ] Caminho em index.html está correto?
+  [ ] Status 200 no Network (DevTools)
+  [ ] Console mostra erros específicos?
+  [ ] Tamanho do arquivo é ~1.6MB?
+
+═══════════════════════════════════════════════════════════════════════
+
+STATUS FINAL
+═══════════════════════════════════════════════════════════════════════
+
+Validação Local:        ✅ COMPLETA
+Arquivos Preparados:    ✅ SIM
+Estrutura:              ✅ CORRETA
+Caminhos:               ✅ RELATIVOS
+.htaccess:              ✅ CRIADO
+CSS Compilado:          ✅ SIM
+React Build:            ✅ PRONTO
+
+Próximo Passo:          FAZER UPLOAD PARA HOSTINGER
+
+═══════════════════════════════════════════════════════════════════════
+
+Localizações dos Arquivos Locais:
+C:\Users\santa\Downloads\crm-frontend-main\dist\
+
+Documentação Completa:
+C:\Users\santa\Downloads\crm-frontend-main\HOSTINGER_DEPLOYMENT_GUIDE.md
+
+═══════════════════════════════════════════════════════════════════════
