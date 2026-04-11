@@ -287,21 +287,26 @@ export function useCrmData() {
       }
 
       // 2. Transformar dados do Supabase para formato do app
-      const leadsFormatados: Lead[] = leadsData.map((lead: any) => ({
-        id: lead.id,
-        nome: lead.nome || '',
-        telefone: lead.telefone || '',
-        email: lead.email || '',
-        origem: lead.origem || '',
-        pipelineId: lead.pipeline_id || 'pipeline-padrao',
-        colunaId: lead.stage_id || 'novo-lead',
-        criadoEm: lead.created_at || new Date().toISOString(),
-        tarefas: [],
-        anotacoes: [],
-        agendamentos: [],
-        orcamentos: [],
-        atividades: [],
-      }));
+      const leadsFormatados: Lead[] = leadsData.map((lead: any) => {
+        // Debug logs
+        console.log(`[Supabase] Lead recebido: id=${lead.id}, name="${lead.name}", phone="${lead.telefone}", pipeline="${lead.pipeline_id}", stage="${lead.stage_id}"`);
+
+        return {
+          id: lead.id,
+          nome: lead.name || lead.nome || '', // Suporta ambos "name" (n8n) e "nome"
+          telefone: lead.telefone || '',
+          email: lead.email || '',
+          origem: lead.origem || '',
+          pipelineId: lead.pipeline_id || '', // Sem fallback - se não tiver, deixar vazio
+          colunaId: lead.stage_id || '', // Sem fallback - se não tiver, deixar vazio
+          criadoEm: lead.created_at || new Date().toISOString(),
+          tarefas: [],
+          anotacoes: [],
+          agendamentos: [],
+          orcamentos: [],
+          atividades: [],
+        };
+      });
 
       console.log('[Supabase] ✅ Leads carregados:', leadsFormatados.length);
       setLeads(leadsFormatados);
@@ -611,11 +616,11 @@ export function useCrmData() {
         .upsert(
           {
             id: newLead.id,
-            nome: newLead.nome,
+            name: newLead.nome, // Usar "name" (compatível com n8n)
             telefone: telefoneLimpo || null,
             origem: newLead.origem || '',
-            pipeline_id: newLead.pipelineId || 'pipeline-padrao',
-            stage_id: newLead.colunaId || 'novo-lead',
+            pipeline_id: newLead.pipelineId,
+            stage_id: newLead.colunaId,
             user_id: user.id,
           },
           { onConflict: 'id' }
@@ -659,7 +664,7 @@ export function useCrmData() {
       const { error: updateError } = await supabase
         .from('leads')
         .update({
-          nome: updates.nome || lead.nome,
+          name: updates.nome || lead.nome, // Usar "name" (compatível com n8n)
           origem: updates.origem || lead.origem,
           pipeline_id: updates.pipelineId || lead.pipelineId,
           stage_id: updates.colunaId || lead.colunaId,

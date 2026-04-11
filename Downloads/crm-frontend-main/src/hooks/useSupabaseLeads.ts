@@ -57,14 +57,15 @@ export function useSupabaseLeads() {
 
         if (!existingLead) {
           // Lead novo - adicionar ao CRM
+          console.log(`[useSupabaseLeads] Adicionando lead: id=${lead.id}, name="${lead.name}", pipeline="${lead.pipeline_id}", stage="${lead.stage_id}"`);
           crm.addLead({
             id: lead.id,
-            nome: lead.name || 'Lead importado',
+            nome: lead.name || lead.nome || '', // Suporta ambos "name" (n8n) e "nome"
             telefone: lead.telefone || '',
             email: lead.email || '',
             origem: lead.origem || '',
-            pipelineId: lead.pipeline_id || crm.pipelines[0]?.id || '',
-            colunaId: lead.stage_id || crm.pipelines[0]?.colunas[0]?.id || '',
+            pipelineId: lead.pipeline_id || '',
+            colunaId: lead.stage_id || '',
             criadoEm: lead.created_at || new Date().toISOString(),
           });
         } else {
@@ -161,7 +162,7 @@ export function useSupabaseLeads() {
 
           if (existingLead) {
             crm.updateLead(lead.id, {
-              nome: lead.name || existingLead.nome,
+              nome: lead.name || lead.nome || existingLead.nome,
               telefone: lead.telefone || existingLead.telefone,
               email: lead.email || existingLead.email,
               origem: lead.origem || existingLead.origem,
