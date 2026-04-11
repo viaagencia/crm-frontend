@@ -1,40 +1,56 @@
 <IfModule mod_rewrite.c>
+  # ✅ ATIVAR REWRITE ENGINE PARA SPA ROUTING
   RewriteEngine On
   RewriteBase /
 
-  # Não redirecionar arquivos existentes
-  RewriteCond %{REQUEST_FILENAME} -f
-  RewriteRule ^ - [QSA,L]
-
-  # Não redirecionar diretórios existentes
+  # ✅ Não redirecionar arquivos existentes (assets, imagens, etc)
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [QSA,L]
 
-  # Redirecionar todas as outras requisições para index.html
-  # Isso permite SPA routing funcionar
-  RewriteRule ^ index.html [QSA,L]
+  # ✅ Redirecionar todas as outras requisições para index.html
+  # Isso permite React Router funcionar em ANY rota (ex: /pipeline-padrao, /leads, etc)
+  # Sem isso, recarregar essas rotas resulta em 404 ou tela branca
+  RewriteRule ^(.*)$ index.html [QSA,L]
 </IfModule>
 
-# Habilitar compressão gzip
+# ✅ Habilitar compressão gzip para reduzir tamanho dos arquivos
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html
-  AddOutputFilterByType DEFLATE text/plain
-  AddOutputFilterByType DEFLATE text/xml
-  AddOutputFilterByType DEFLATE text/css
-  AddOutputFilterByType DEFLATE text/javascript
-  AddOutputFilterByType DEFLATE application/xml
-  AddOutputFilterByType DEFLATE application/xhtml+xml
-  AddOutputFilterByType DEFLATE application/rss+xml
-  AddOutputFilterByType DEFLATE application/javascript
-  AddOutputFilterByType DEFLATE application/x-javascript
+  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript
+  AddOutputFilterByType DEFLATE application/xml application/xhtml+xml application/rss+xml
+  AddOutputFilterByType DEFLATE application/javascript application/x-javascript application/json
+
+  # ✅ Detectar e não comprimir se já comprimido
+  DeflateCompressionLevel 6
+  BrowserMatch ^Mozilla/4 gzip-only-text/html
+  BrowserMatch ^Mozilla/4\.0[678] no-gzip
+  BrowserMatch \bMSIE !no-gzip !gzip-only-text/html
 </IfModule>
 
-# Cache headers para assets
+# ✅ Cache headers para assets (JS, CSS, fonts, imagens)
 <FilesMatch "\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$">
   Header set Cache-Control "public, max-age=31536000, immutable"
+  Header set Expires "Thu, 31 Dec 2037 23:55:55 GMT"
 </FilesMatch>
 
-# Não cachear index.html
+# ✅ NÃO cachear index.html - sempre buscar versão mais recente
 <FilesMatch "^index\.html$">
-  Header set Cache-Control "public, max-age=0, must-revalidate"
+  Header set Cache-Control "public, max-age=0, must-revalidate, proxy-revalidate"
+  Header set Pragma "public"
+  Header set Expires "0"
 </FilesMatch>
+
+# ✅ Headers de segurança
+<IfModule mod_headers.c>
+  # Prevenir click-jacking
+  Header set X-Frame-Options "SAMEORIGIN"
+
+  # Prevenir MIME-type sniffing
+  Header set X-Content-Type-Options "nosniff"
+
+  # Ativar proteção XSS no navegador
+  Header set X-XSS-Protection "1; mode=block"
+
+  # Referrer Policy
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

@@ -242,6 +242,7 @@ export function useSupabaseLeads() {
 
   /**
    * Efeito: carregar dados inicialmente e subscrever a mudanças
+   * COM POLLING COMO FALLBACK para garantir sincronização
    */
   useEffect(() => {
     if (!user?.id) {
@@ -261,8 +262,96 @@ export function useSupabaseLeads() {
       });
     }
 
-    // Cleanup: remover subscription ao desmontar
+    // 🔄 POLLING COMO FALLBACK: sincronizar a cada 15 segundos
+    // Isso garante que se realtime falhar, os dados ainda serão atualizados
+    const pollingInterval = setInterval(async () => {
+      console.log('[useSupabaseLeads] 🔄 Polling automático para sincronizar dados...');
+
+      try {
+        const { data, error } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('[useSupabaseLeads] Erro no polling:', error);
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          console.log('[useSupabaseLeads] Nenhum lead encontrado no polling');
+          return;
+        }
+
+        // ✅ Atualizar leads que não existem ainda (novos) ou que mudaram
+        setLeads((prevLeads) => {
+          const updated = [...prevLeads];
+          let hasChanges = false;
+
+          for (const lead of data) {
+            const existingIndex = updated.findIndex(l => l.id === lead.id);
+
+            if (existingIndex === -1) {
+              // Lead novo - adicionar
+              console.log(`[useSupabaseLeads] 🆕 Novo lead detectado via polling: ${lead.id}`);
+              updated.push({
+                id: lead.id,
+                nome: lead.name || lead.nome || '',
+                telefone: lead.telefone || '',
+                email: lead.email || '',
+                origem: lead.origem || '',
+                pipelineId: lead.pipeline_id || '',
+                colunaId: lead.stage_id || '',
+                criadoEm: lead.created_at || new Date().toISOString(),
+                tarefas: [],
+                anotacoes: [],
+                agendamentos: [],
+                orcamentos: [],
+                atividades: [],
+              });
+              hasChanges = true;
+            } else {
+              // Lead existente - verificar se mudou
+              const existing = updated[existingIndex];
+              if (
+                existing.nome !== lead.name ||
+                existing.telefone !== lead.telefone ||
+                existing.email !== lead.email ||
+                existing.origem !== lead.origem ||
+                existing.pipelineId !== lead.pipeline_id ||
+                existing.colunaId !== lead.stage_id
+              ) {
+                console.log(`[useSupabaseLeads] ✏️ Lead atualizado via polling: ${lead.id}`);
+                updated[existingIndex] = {
+                  ...existing,
+                  nome: lead.name || lead.nome || existing.nome,
+                  telefone: lead.telefone || existing.telefone,
+                  email: lead.email || existing.email,
+                  origem: lead.origem || existing.origem,
+                  pipelineId: lead.pipeline_id || existing.pipelineId,
+                  colunaId: lead.stage_id || existing.colunaId,
+                };
+                hasChanges = true;
+              }
+            }
+          }
+
+          if (hasChanges) {
+            console.log('[useSupabaseLeads] ✅ Dados sincronizados via polling');
+            return updated;
+          }
+
+          return prevLeads;
+        });
+      } catch (err) {
+        console.error('[useSupabaseLeads] Erro ao fazer polling:', err);
+      }
+    }, 15000); // 15 segundos = fallback rápido sem sobrecarregar servidor
+
+    // Cleanup: remover polling e subscription ao desmontar
     return () => {
+      clearInterval(pollingInterval);
       if (subscriptionRef.current) {
         console.log('[useSupabaseLeads] Removendo subscription (unmount)');
         supabase.removeChannel(subscriptionRef.current);
