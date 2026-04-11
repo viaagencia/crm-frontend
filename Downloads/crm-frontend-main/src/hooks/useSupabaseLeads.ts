@@ -19,6 +19,30 @@ export function useSupabaseLeads() {
   const loadedRef = useRef(false);
 
   /**
+   * Remover leads duplicados (caso existam no CRM)
+   * Mantém apenas o primeiro de cada ID
+   */
+  const deduplicateLeads = useCallback(() => {
+    const seen = new Set<string>();
+    const duplicates: string[] = [];
+
+    for (const lead of crm.leads) {
+      if (seen.has(lead.id)) {
+        duplicates.push(lead.id);
+      } else {
+        seen.add(lead.id);
+      }
+    }
+
+    if (duplicates.length > 0) {
+      console.warn('[useSupabaseLeads] ⚠️ Removendo leads duplicados:', duplicates);
+      for (const leadId of duplicates) {
+        crm.deleteLead(leadId);
+      }
+    }
+  }, [crm]);
+
+  /**
    * Buscar leads do Supabase
    * Filtra por user_id do usuário logado
    */
@@ -132,18 +156,22 @@ export function useSupabaseLeads() {
           console.log('[useSupabaseLeads] 🆕 Novo lead inserido:', payload.new);
           const lead = payload.new;
 
+          // 🔒 Verificação dupla contra duplicação
           const existingLead = crm.leads.find(l => l.id === lead.id);
           if (!existingLead) {
+            // ✅ Preservar dados exatos do Supabase, sem fallbacks ruins
             crm.addLead({
               id: lead.id,
-              nome: lead.name || 'Lead importado',
+              nome: lead.name || lead.nome || '', // Suporta ambos "name" e "nome", sem fallback "Lead importado"
               telefone: lead.telefone || '',
               email: lead.email || '',
               origem: lead.origem || '',
-              pipelineId: lead.pipeline_id || crm.pipelines[0]?.id || '',
-              colunaId: lead.stage_id || crm.pipelines[0]?.colunas[0]?.id || '',
+              pipelineId: lead.pipeline_id || '', // Sem fallback hardcoded
+              colunaId: lead.stage_id || '', // Sem fallback hardcoded
               criadoEm: lead.created_at || new Date().toISOString(),
             });
+          } else {
+            console.log('[useSupabaseLeads] Lead já existe, ignorando duplicação:', lead.id);
           }
         }
       )
@@ -161,14 +189,22 @@ export function useSupabaseLeads() {
           const existingLead = crm.leads.find(l => l.id === lead.id);
 
           if (existingLead) {
-            crm.updateLead(lead.id, {
-              nome: lead.name || lead.nome || existingLead.nome,
-              telefone: lead.telefone || existingLead.telefone,
-              email: lead.email || existingLead.email,
-              origem: lead.origem || existingLead.origem,
-              pipelineId: lead.pipeline_id || existingLead.pipelineId,
-              colunaId: lead.stage_id || existingLead.colunaId,
-            });
+            // ✅ Atualizar apenas campos que mudaram
+            const updates: Record<string, any> = {};
+            if (lead.name && existingLead.nome !== lead.name) updates.nome = lead.name;
+            if (lead.telefone && existingLead.telefone !== lead.telefone) updates.telefone = lead.telefone;
+            if (lead.email && existingLead.email !== lead.email) updates.email = lead.email;
+            if (lead.origem && existingLead.origem !== lead.origem) updates.origem = lead.origem;
+            if (lead.pipeline_id && existingLead.pipelineId !== lead.pipeline_id) updates.pipelineId = lead.pipeline_id;
+            if (lead.stage_id && existingLead.colunaId !== lead.stage_id) updates.colunaId = lead.stage_id;
+
+            if (Object.keys(updates).length > 0) {
+              crm.updateLead(lead.id, updates);
+            } else {
+              console.log('[useSupabaseLeads] Nenhuma alteração detectada para:', lead.id);
+            }
+          } else {
+            console.log('[useSupabaseLeads] Lead não encontrado para atualização:', lead.id);
           }
         }
       )
@@ -217,6 +253,8 @@ export function useSupabaseLeads() {
     if (!loadedRef.current) {
       console.log('[useSupabaseLeads] Carregando dados iniciais...');
       loadLeads().then(() => {
+        // 🧹 Remover qualquer duplicata que possa ter sido criada
+        deduplicateLeads();
         loadedRef.current = true;
         // Subscrever após carregar dados
         subscribeToChanges();
@@ -230,7 +268,7 @@ export function useSupabaseLeads() {
         supabase.removeChannel(subscriptionRef.current);
       }
     };
-  }, [user?.id, loadLeads, subscribeToChanges]);
+  }, [user?.id, loadLeads, subscribeToChanges, deduplicateLeads]);
 
   return { isLoading, error };
 }

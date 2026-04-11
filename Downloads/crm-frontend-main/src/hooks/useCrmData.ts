@@ -593,15 +593,21 @@ export function useCrmData() {
       return null;
     }
 
+    // 🔒 Verificação de duplicação: se lead já existe com este ID, não adicionar novamente
+    if (lead.id && leads.some(l => l.id === lead.id)) {
+      console.log('[Lead] Lead já existe, atualizando em vez de duplicar:', lead.id);
+      return lead;
+    }
+
     const newLead: Lead = {
       ...lead,
-      id: crypto.randomUUID(),
-      criadoEm: new Date().toISOString(),
-      tarefas: [],
-      anotacoes: [],
-      agendamentos: [],
-      orcamentos: [],
-      atividades: [],
+      id: lead.id || crypto.randomUUID(), // ✅ Usar ID existente, ou gerar novo se não houver
+      criadoEm: lead.criadoEm || new Date().toISOString(),
+      tarefas: lead.tarefas || [],
+      anotacoes: lead.anotacoes || [],
+      agendamentos: lead.agendamentos || [],
+      orcamentos: lead.orcamentos || [],
+      atividades: lead.atividades || [],
     };
 
     try {
