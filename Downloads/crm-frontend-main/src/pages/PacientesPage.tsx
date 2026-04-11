@@ -7,15 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { OrigemSelect } from '@/components/OrigemSelect';
 import {
-  enviarLeadParaSheets,
-  enviarPacienteParaSheets,
-  apagarLeadDaSheets,
-  atualizarEtapaNaSheets,
-} from '@/hooks/useGoogleSheetsSync';
-import { moverStageNoSupabase, deletarDoSupabase } from '@/hooks/useSupabaseSync';
+  createLeadInSupabase,
+  updateLeadStageInSupabase,
+  updateLeadPipelineInSupabase,
+  deleteLeadFromSupabase,
+} from '@/hooks/useSupabaseLeadsActions';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function PacientesPage() {
   const crm = useCrm();
+  const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addDialog, setAddDialog] = useState<string | null>(null);
   const [form, setForm] = useState({ nome: '', telefone: '', email: '', origem: '' });
@@ -41,25 +42,42 @@ export default function PacientesPage() {
     tarefas: p.tarefas,
   }));
 
-  // ✅ Adiciona paciente no CRM + envia para o Sheets
+  // ✅ Adiciona paciente no CRM + Supabase
   const handleAdd = async () => {
-    if (!form.nome.trim() || !addDialog) return;
+    if (!form.nome.trim() || !addDialog || !user?.id) return;
 
-    crm.addPaciente({
-      nome: form.nome,
-      telefone: form.telefone,
-      email: form.email,
-      origem: form.origem,
-      colunaId: addDialog,
-    });
+    try {
+      // Encontrar o pipeline de pacientes
+      const pacientesPipeline = crm.pipelines.find(p => p.nome === 'Pacientes');
+      if (!pacientesPipeline) return;
 
-    if (form.telefone) {
-      // Sheets
-      await enviarPacienteParaSheets(form.nome, form.telefone, form.origem);
+      // Criar paciente no Supabase
+      const newLead = await createLeadInSupabase(
+        form.nome,
+        form.telefone,
+        form.origem,
+        pacientesPipeline.id,
+        addDialog,
+        user.id
+      );
+
+      if (newLead) {
+        // Sincronizar com CRM context
+        await crm.addPaciente({
+          id: newLead.id,
+          nome: newLead.nome,
+          telefone: newLead.telefone,
+          email: newLead.email,
+          origem: newLead.origem,
+          colunaId: addDialog,
+        });
+      }
+
+      setForm({ nome: '', telefone: '', email: '', origem: '' });
+      setAddDialog(null);
+    } catch (err) {
+      console.error('Erro ao criar paciente:', err);
     }
-
-    setForm({ nome: '', telefone: '', email: '', origem: '' });
-    setAddDialog(null);
   };
 
   // ✅ Move paciente de volta para um funil (vira lead novamente)
@@ -67,27 +85,35 @@ export default function PacientesPage() {
     const targetPipeline = crm.pipelines.find(p => p.id === pipelineId);
     if (!targetPipeline) return;
 
-    const paciente = crm.pacientes.find(p => p.id === pacienteId);
-    if (!paciente) return;
+    try {
+      // Atualizar no Supabase
+      await updateLeadPipelineInSupabase(
+        pacienteId,
+        pipelineId,
+        targetPipeline.colunas[0]?.id
+      );
 
-    crm.convertPacienteToLead(pacienteId, pipelineId, targetPipeline.colunas[0]?.id);
-
-    // ✅ Atualiza no Sheets com o nome real do funil destino
-    await atualizarEtapaNaSheets(paciente.telefone, targetPipeline.colunas[0]?.nome || 'Lead', targetPipeline.nome);
+      // Converter paciente para lead no CRM context
+      crm.convertPacienteToLead(pacienteId, pipelineId, targetPipeline.colunas[0]?.id);
+    } catch (err) {
+      console.error('Erro ao mover paciente para lead:', err);
+    }
   };
 
-  // ✅ Deleta do CRM + apaga do Sheets
+  // ✅ Deleta do CRM + Supabase
   const handleDelete = async (contato: any) => {
-    const telefone = String(contato.telefone || '').replace(/\D/g, '');
+    try {
+      // Deletar do Supabase
+      const deleted = await deleteLeadFromSupabase(contato.id);
 
-    crm.deletePaciente(contato.id);
-    setSelectedId(null);
+      if (deleted) {
+        // Deletar paciente do CRM context
+        crm.deletePaciente(contato.id);
+      }
 
-    if (telefone) {
-      // Sheets
-      await apagarLeadDaSheets(telefone);
-      // Supabase
-      await deletarDoSupabase(telefone);
+      setSelectedId(null);
+    } catch (err) {
+      console.error('Erro ao deletar paciente:', err);
     }
   };
 
@@ -104,16 +130,15 @@ export default function PacientesPage() {
         colunas={crm.colunasPacientes}
         setColunas={updateColunasPacientes}
         items={items}
-        onItemMove={(id, colId) => {
-          crm.updatePaciente(id, { colunaId: colId });
+        onItemMove={async (id, colId) => {
+          try {
+            // Atualizar no Supabase
+            await updateLeadStageInSupabase(id, colId);
 
-          const paciente = crm.pacientes.find(p => p.id === id);
-          const coluna = crm.colunasPacientes.find(c => c.id === colId);
-          if (paciente && coluna) {
-            // Sheets
-            atualizarEtapaNaSheets(paciente.telefone, coluna.nome, 'Pacientes');
-            // Supabase
-            moverStageNoSupabase(paciente.telefone, colId);
+            // Atualizar paciente no CRM context
+            crm.updatePaciente(id, { colunaId: colId });
+          } catch (err) {
+            console.error('Erro ao mover paciente:', err);
           }
         }}
         onItemClick={setSelectedId}

@@ -16,16 +16,18 @@ import {
 } from '@/components/ui/alert-dialog';
 
 import {
-  enviarLeadParaSheets,
-  atualizarEtapaNaSheets,
-  enviarPacienteParaSheets,
-  apagarLeadDaSheets,
-} from '@/hooks/useGoogleSheetsSync';
+  createLeadInSupabase,
+  updateLeadStageInSupabase,
+  updateLeadPipelineInSupabase,
+  deleteLeadFromSupabase,
+} from '@/hooks/useSupabaseLeadsActions';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function LeadsPage() {
   const { pipelineId } = useParams();
   const navigate = useNavigate();
   const crm = useCrm();
+  const { user } = useAuth();
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [addDialog, setAddDialog] = useState<string | null>(null);
@@ -106,23 +108,37 @@ export default function LeadsPage() {
   }
 
   const handleAddLead = async () => {
-    if (!form.nome.trim() || !addDialog || !pipelineId) return;
+    if (!form.nome.trim() || !addDialog || !pipelineId || !user?.id) return;
 
-    // Adicionar lead (já sincroniza com Supabase)
-    await crm.addLead({
-      nome: form.nome,
-      telefone: form.telefone,
-      email: form.email,
-      origem: form.origem,
-      colunaId: addDialog,
-      pipelineId,
-    });
+    try {
+      // Criar lead no Supabase
+      const newLead = await createLeadInSupabase(
+        form.nome,
+        form.telefone,
+        form.origem,
+        pipelineId,
+        addDialog,
+        user.id
+      );
 
-    // Sheets
-    enviarLeadParaSheets(form.nome, form.telefone, form.origem, pipeline?.nome || 'Leads');
+      if (newLead) {
+        // Sincronizar com CRM context
+        await crm.addLead({
+          id: newLead.id,
+          nome: newLead.nome,
+          telefone: newLead.telefone,
+          email: newLead.email,
+          origem: newLead.origem,
+          colunaId: addDialog,
+          pipelineId,
+        });
+      }
 
-    setForm({ nome: '', telefone: '', email: '', origem: '' });
-    setAddDialog(null);
+      setForm({ nome: '', telefone: '', email: '', origem: '' });
+      setAddDialog(null);
+    } catch (err) {
+      console.error('Erro ao criar lead:', err);
+    }
   };
 
   // Recebe o objeto contato completo (chamado pelo ContatoDetail)
@@ -130,17 +146,24 @@ export default function LeadsPage() {
     const firstCol = crm.colunasPacientes[0];
     if (!firstCol) return;
 
-    const lead = crm.leads.find(l => l.id === contato.id);
+    try {
+      // Encontrar o pipeline de pacientes
+      const pacientesPipeline = crm.pipelines.find(p => p.nome === 'Pacientes');
+      if (!pacientesPipeline) return;
 
-    // Converter lead para paciente (já sincroniza com Supabase)
-    await crm.convertLeadToPaciente(contato.id, firstCol.id);
-    setSelectedLeadId(null);
+      // Atualizar no Supabase (mudar pipeline e stage)
+      await updateLeadPipelineInSupabase(
+        contato.id,
+        pacientesPipeline.id,
+        firstCol.id
+      );
 
-    if (!lead) return;
-
-    // ✅ Atualiza a MESMA linha na planilha — muda Funil para 'Pacientes'
-    // Evita criar nova linha (duplicação)
-    await atualizarEtapaNaSheets(lead.telefone, 'Em Tratamento', 'Pacientes');
+      // Converter lead para paciente (já sincroniza com Supabase)
+      await crm.convertLeadToPaciente(contato.id, firstCol.id);
+      setSelectedLeadId(null);
+    } catch (err) {
+      console.error('Erro ao converter lead:', err);
+    }
   };
 
   const handleMoverPipeline = async (id: string, pipelineId: string) => {
@@ -156,15 +179,18 @@ export default function LeadsPage() {
 
   // Recebe o objeto contato completo (chamado pelo ContatoDetail)
   const handleDelete = async (contato: any) => {
-    const telefone = String(contato.telefone || '').replace(/\D/g, '');
+    try {
+      // Deletar do Supabase
+      const deleted = await deleteLeadFromSupabase(contato.id);
 
-    // Deletar lead (já sincroniza com Supabase)
-    await crm.deleteLead(contato.id);
-    setSelectedLeadId(null);
+      if (deleted) {
+        // Deletar lead do CRM context
+        await crm.deleteLead(contato.id);
+      }
 
-    if (telefone) {
-      // Sheets
-      await apagarLeadDaSheets(telefone);
+      setSelectedLeadId(null);
+    } catch (err) {
+      console.error('Erro ao deletar lead:', err);
     }
   };
 
@@ -220,15 +246,14 @@ export default function LeadsPage() {
         setColunas={updatePipelineColunas}
         items={items}
         onItemMove={async (id, colId) => {
-          // Atualizar lead (já sincroniza com Supabase)
-          await crm.updateLead(id, { colunaId: colId });
+          try {
+            // Atualizar no Supabase
+            await updateLeadStageInSupabase(id, colId);
 
-          const lead = crm.leads.find(l => l.id === id);
-          const coluna = pipeline?.colunas.find(c => c.id === colId);
-
-          if (lead && coluna) {
-            // Sheets
-            atualizarEtapaNaSheets(lead.telefone, coluna.nome, pipeline?.nome || 'Leads');
+            // Atualizar lead no CRM context
+            await crm.updateLead(id, { colunaId: colId });
+          } catch (err) {
+            console.error('Erro ao mover lead:', err);
           }
         }}
         onItemClick={setSelectedLeadId}

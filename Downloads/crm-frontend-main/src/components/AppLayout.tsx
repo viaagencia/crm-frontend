@@ -1,10 +1,8 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { UserHeader } from "@/components/UserHeader";
-import { RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useCrm } from "@/contexts/CrmContext";
-import { useGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
+import { useSupabaseLeads } from "@/hooks/useSupabaseLeads";
 import { useBackendSync } from "@/hooks/useBackendSync";
 import { usePhoneBasedSync } from "@/hooks/usePhoneBasedSync";
 import { usePeriodicPhoneSync } from "@/hooks/usePeriodicPhoneSync";
@@ -12,11 +10,11 @@ import { useSupabaseSync } from "@/hooks/useSupabaseSync";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const crm = useCrm();
-  const { syncNow, isSyncing } = useGoogleSheetsSync();
+  useSupabaseLeads(); // 📡 Realtime subscription para leads - substitui polling de Google Sheets
   useBackendSync(); // Sincroniza com MySQL para persistência entre navegadores
   usePhoneBasedSync(); // Carrega tarefas/atividades/anotações baseado no telefone do lead
   usePeriodicPhoneSync({ interval: 5 * 60 * 1000 }); // Sincroniza a cada 5 minutos
-  useSupabaseSync(); // Espelha leads/pacientes para Supabase (complementar ao Sheets)
+  useSupabaseSync(); // Espelha leads/pacientes para Supabase
 
   return (
     <SidebarProvider>
@@ -29,16 +27,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <span className="text-lg font-bold text-primary tracking-tight">Via clinic</span>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={syncNow}
-                disabled={isSyncing}
-                className="gap-2"
-              >
-                <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                Atualizar Leads
-              </Button>
               <UserHeader />
             </div>
           </header>
