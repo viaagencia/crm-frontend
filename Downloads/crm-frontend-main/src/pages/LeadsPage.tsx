@@ -7,6 +7,7 @@ import { OrigemSelect } from '@/components/OrigemSelect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Plus, Trash2 } from 'lucide-react';
 import supabase from '@/lib/supabase';
 

@@ -14,6 +14,8 @@ import { Plus, Trash2, Pencil, Check, X, Phone, MessageCircle } from 'lucide-rea
 import { format } from 'date-fns';
 import supabase from '@/lib/supabase';
 import { useCrm } from '@/contexts/CrmContext';
+import { useAuth } from '@/hooks/useAuth';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 interface Props {
   contato: any;
@@ -27,11 +29,20 @@ interface Props {
 export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPaciente, onMoverPipeline }: Props) {
 
   const crm = useCrm();
+  const { user } = useAuth();
 
   const [tarefas, setTarefas] = useState<any[]>([]);
   const [atividades, setAtividades] = useState<any[]>([]);
   const [anotacoes, setAnotacoes] = useState<any[]>([]);
   const [agendamentos, setAgendamentos] = useState<any[]>([]);
+
+  // ✅ Loading states granulares (previne cliques múltiplos / dados duplicados)
+  const [loadingTask, setLoadingTask] = useState(false);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [loadingNote, setLoadingNote] = useState(false);
+  const [loadingEvent, setLoadingEvent] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [savingLead, setSavingLead] = useState(false);
 
   const [newTask, setNewTask] = useState('');
   const [newTaskData, setNewTaskData] = useState('');
@@ -68,29 +79,35 @@ export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPac
   }, [contato]);
 
   const salvarLead = async () => {
-    await supabase
-      .from('leads')
-      .update({
-        nome: editNome,
-        telefone: editTelefone,
-        email: editEmail,
-        origem: editOrigem,
-      })
-      .eq('telefone', contato.telefone);
+    if (savingLead) return;
+    setSavingLead(true);
+    try {
+      await supabase
+        .from('leads')
+        .update({
+          nome: editNome,
+          telefone: editTelefone,
+          email: editEmail,
+          origem: editOrigem,
+        })
+        .eq('telefone', contato.telefone);
 
-    // ✅ Converter para paciente
-    if (editPipelineId === '__pacientes__') {
+      // ✅ Converter para paciente
+      if (editPipelineId === '__pacientes__') {
+        setIsEditing(false);
+        onConverterPaciente?.(contato);
+        return;
+      }
+
+      // ✅ Mover para outro funil
+      if (onMoverPipeline && editPipelineId && editPipelineId !== contato.pipelineId) {
+        onMoverPipeline(contato.id, editPipelineId);
+      }
+
       setIsEditing(false);
-      onConverterPaciente?.(contato);
-      return;
+    } finally {
+      setSavingLead(false);
     }
-
-    // ✅ Mover para outro funil
-    if (onMoverPipeline && editPipelineId && editPipelineId !== contato.pipelineId) {
-      onMoverPipeline(contato.id, editPipelineId);
-    }
-
-    setIsEditing(false);
   };
 
   const cancelarEdicao = () => {
@@ -129,93 +146,147 @@ export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPac
   // TAREFA
   // =====================
   const addTask = async () => {
-    if (!newTask) return;
+    if (!newTask || loadingTask) return;
+    setLoadingTask(true);
+    try {
+      const dataHora = newTaskData && newTaskHora
+        ? `${newTaskData}T${newTaskHora}`
+        : null;
 
-    const dataHora = newTaskData && newTaskHora
-      ? `${newTaskData}T${newTaskHora}`
-      : null;
+      const payload: any = {
+        title: newTask,
+        telefone: contato.telefone,
+        data_de_vencimento: dataHora,
+        status: 'pending'
+      };
+      if (user?.id) payload.user_id = user.id;
 
-    await supabase.from('tasks').insert([{
-      title: newTask,
-      telefone: contato.telefone,
-      data_de_vencimento: dataHora,
-      status: 'pending'
-    }]);
+      await supabase.from('tasks').insert([payload]);
 
-    setNewTask('');
-    setNewTaskData('');
-    setNewTaskHora('');
-    buscarTudo();
+      setNewTask('');
+      setNewTaskData('');
+      setNewTaskHora('');
+      await buscarTudo();
+    } finally {
+      setLoadingTask(false);
+    }
   };
 
   const deleteTask = async (id: string) => {
-    await supabase.from('tasks').delete().eq('id', id);
-    buscarTudo();
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      await supabase.from('tasks').delete().eq('id', id);
+      await buscarTudo();
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   // =====================
   // ATIVIDADE
   // =====================
   const addAtividade = async () => {
-    await supabase.from('activities').insert([{
-      telefone: contato.telefone,
-      type: atividadeTipo,
-      status: atividadeStatus,
-      observacao: atividadeObs,
-      created_at: new Date().toISOString()
-    }]);
+    if (loadingActivity) return;
+    setLoadingActivity(true);
+    try {
+      const payload: any = {
+        telefone: contato.telefone,
+        type: atividadeTipo,
+        status: atividadeStatus,
+        observacao: atividadeObs,
+        created_at: new Date().toISOString()
+      };
+      if (user?.id) payload.user_id = user.id;
 
-    setAtividadeObs('');
-    buscarTudo();
+      await supabase.from('activities').insert([payload]);
+
+      setAtividadeObs('');
+      await buscarTudo();
+    } finally {
+      setLoadingActivity(false);
+    }
   };
 
   const deleteAtividade = async (id: string) => {
-    await supabase.from('activities').delete().eq('id', id);
-    buscarTudo();
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      await supabase.from('activities').delete().eq('id', id);
+      await buscarTudo();
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   // =====================
   // ANOTAÇÃO
   // =====================
   const addAnotacao = async () => {
-    if (!newNote) return;
+    if (!newNote || loadingNote) return;
+    setLoadingNote(true);
+    try {
+      const payload: any = {
+        telefone: contato.telefone,
+        content: newNote,
+        created_at: new Date().toISOString()
+      };
+      if (user?.id) payload.user_id = user.id;
 
-    await supabase.from('notes').insert([{
-      telefone: contato.telefone,
-      content: newNote,
-      created_at: new Date().toISOString()
-    }]);
+      await supabase.from('notes').insert([payload]);
 
-    setNewNote('');
-    buscarTudo();
+      setNewNote('');
+      await buscarTudo();
+    } finally {
+      setLoadingNote(false);
+    }
   };
 
   const deleteAnotacao = async (id: string) => {
-    await supabase.from('notes').delete().eq('id', id);
-    buscarTudo();
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      await supabase.from('notes').delete().eq('id', id);
+      await buscarTudo();
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   // =====================
   // AGENDA
   // =====================
   const addAgendamento = async () => {
-    if (!newAgData || !newAgHora || !newAgTipo) return;
+    if (!newAgData || !newAgHora || !newAgTipo || loadingEvent) return;
+    setLoadingEvent(true);
+    try {
+      const payload: any = {
+        telefone: contato.telefone,
+        title: newAgTipo,
+        data_de_vencimento: new Date(`${newAgData}T${newAgHora}`).toISOString()
+      };
+      if (user?.id) payload.user_id = user.id;
 
-    await supabase.from('events').insert([{
-      telefone: contato.telefone,
-      title: newAgTipo,
-      data_de_vencimento: new Date(`${newAgData}T${newAgHora}`).toISOString()
-    }]);
+      await supabase.from('events').insert([payload]);
 
-    setNewAgData('');
-    setNewAgHora('');
-    setNewAgTipo('');
-    buscarTudo();
+      setNewAgData('');
+      setNewAgHora('');
+      setNewAgTipo('');
+      await buscarTudo();
+    } finally {
+      setLoadingEvent(false);
+    }
   };
 
   const deleteAgendamento = async (id: string) => {
-    await supabase.from('events').delete().eq('id', id);
-    buscarTudo();
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      await supabase.from('events').delete().eq('id', id);
+      await buscarTudo();
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   if (!contato) return null;
@@ -349,11 +420,17 @@ export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPac
               )}
 
               <div className="flex gap-2 pt-1">
-                <Button className="flex-1" onClick={salvarLead}>
-                  <Check className="w-4 h-4 mr-2" />
-                  Salvar
+                <Button className="flex-1" onClick={salvarLead} disabled={savingLead}>
+                  {savingLead ? (
+                    <LoadingSpinner size="sm" text="Salvando..." />
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 mr-2" />
+                      Salvar
+                    </>
+                  )}
                 </Button>
-                <Button className="flex-1" variant="outline" onClick={cancelarEdicao}>
+                <Button className="flex-1" variant="outline" onClick={cancelarEdicao} disabled={savingLead}>
                   <X className="w-4 h-4 mr-2" />
                   Cancelar
                 </Button>
@@ -377,13 +454,15 @@ export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPac
           <TabsContent value="tarefas" className="space-y-3 mt-4">
 
             <div className="flex gap-2">
-              <Input placeholder="Nova tarefa..." value={newTask} onChange={(e) => setNewTask(e.target.value)} />
-              <Button onClick={addTask}><Plus /></Button>
+              <Input placeholder="Nova tarefa..." value={newTask} onChange={(e) => setNewTask(e.target.value)} disabled={loadingTask} />
+              <Button onClick={addTask} disabled={loadingTask || !newTask}>
+                {loadingTask ? <LoadingSpinner size="sm" /> : <Plus />}
+              </Button>
             </div>
 
             <div className="flex gap-2">
-              <Input type="date" value={newTaskData} onChange={(e) => setNewTaskData(e.target.value)} />
-              <Input type="time" value={newTaskHora} onChange={(e) => setNewTaskHora(e.target.value)} />
+              <Input type="date" value={newTaskData} onChange={(e) => setNewTaskData(e.target.value)} disabled={loadingTask} />
+              <Input type="time" value={newTaskHora} onChange={(e) => setNewTaskHora(e.target.value)} disabled={loadingTask} />
             </div>
 
             {tarefas.map(t => (
@@ -396,8 +475,12 @@ export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPac
                     </div>
                   )}
                 </div>
-                <Button size="icon" variant="ghost" onClick={() => deleteTask(t.id)}>
-                  <Trash2 className="w-4 h-4" />
+                <Button size="icon" variant="ghost" onClick={() => deleteTask(t.id)} disabled={deletingId === t.id}>
+                  {deletingId === t.id ? (
+                    <LoadingSpinner size="sm" iconColor="text-red-500" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
                 </Button>
               </div>
             ))}
@@ -425,8 +508,14 @@ export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPac
               </Select>
             </div>
 
-            <Textarea placeholder="Observação..." value={atividadeObs} onChange={(e) => setAtividadeObs(e.target.value)} />
-            <Button onClick={addAtividade}>Registrar</Button>
+            <Textarea placeholder="Observação..." value={atividadeObs} onChange={(e) => setAtividadeObs(e.target.value)} disabled={loadingActivity} />
+            <Button onClick={addAtividade} disabled={loadingActivity}>
+              {loadingActivity ? (
+                <LoadingSpinner size="sm" text="Registrando..." />
+              ) : (
+                'Registrar'
+              )}
+            </Button>
 
             {atividades.map(a => (
               <div key={a.id} className="p-3 border rounded-lg flex justify-between">
@@ -436,8 +525,12 @@ export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPac
                     {new Date(a.created_at).toLocaleString()}
                   </div>
                 </div>
-                <Button size="icon" variant="ghost" onClick={() => deleteAtividade(a.id)}>
-                  <Trash2 className="w-4 h-4" />
+                <Button size="icon" variant="ghost" onClick={() => deleteAtividade(a.id)} disabled={deletingId === a.id}>
+                  {deletingId === a.id ? (
+                    <LoadingSpinner size="sm" iconColor="text-red-500" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
                 </Button>
               </div>
             ))}
@@ -447,8 +540,14 @@ export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPac
           {/* ANOTAÇÕES */}
           <TabsContent value="anotacoes" className="space-y-3 mt-4">
 
-            <Textarea placeholder="Nova anotação..." value={newNote} onChange={(e) => setNewNote(e.target.value)} />
-            <Button onClick={addAnotacao}>Adicionar</Button>
+            <Textarea placeholder="Nova anotação..." value={newNote} onChange={(e) => setNewNote(e.target.value)} disabled={loadingNote} />
+            <Button onClick={addAnotacao} disabled={loadingNote || !newNote}>
+              {loadingNote ? (
+                <LoadingSpinner size="sm" text="Adicionando..." />
+              ) : (
+                'Adicionar'
+              )}
+            </Button>
 
             {anotacoes.map(n => (
               <div key={n.id} className="p-3 border rounded-lg flex justify-between">
@@ -458,8 +557,12 @@ export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPac
                     {new Date(n.created_at).toLocaleString()}
                   </div>
                 </div>
-                <Button size="icon" variant="ghost" onClick={() => deleteAnotacao(n.id)}>
-                  <Trash2 className="w-4 h-4" />
+                <Button size="icon" variant="ghost" onClick={() => deleteAnotacao(n.id)} disabled={deletingId === n.id}>
+                  {deletingId === n.id ? (
+                    <LoadingSpinner size="sm" iconColor="text-red-500" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
                 </Button>
               </div>
             ))}
@@ -470,12 +573,18 @@ export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPac
           <TabsContent value="agenda" className="space-y-3 mt-4">
 
             <div className="flex gap-2">
-              <Input type="date" value={newAgData} onChange={(e) => setNewAgData(e.target.value)} />
-              <Input type="time" value={newAgHora} onChange={(e) => setNewAgHora(e.target.value)} />
+              <Input type="date" value={newAgData} onChange={(e) => setNewAgData(e.target.value)} disabled={loadingEvent} />
+              <Input type="time" value={newAgHora} onChange={(e) => setNewAgHora(e.target.value)} disabled={loadingEvent} />
             </div>
 
-            <Input placeholder="Tipo (Consulta...)" value={newAgTipo} onChange={(e) => setNewAgTipo(e.target.value)} />
-            <Button onClick={addAgendamento}>Agendar</Button>
+            <Input placeholder="Tipo (Consulta...)" value={newAgTipo} onChange={(e) => setNewAgTipo(e.target.value)} disabled={loadingEvent} />
+            <Button onClick={addAgendamento} disabled={loadingEvent || !newAgData || !newAgHora || !newAgTipo}>
+              {loadingEvent ? (
+                <LoadingSpinner size="sm" text="Agendando..." />
+              ) : (
+                'Agendar'
+              )}
+            </Button>
 
             {agendamentos.map(a => (
               <div key={a.id} className="p-3 border rounded-lg flex justify-between">
@@ -485,8 +594,12 @@ export function ContatoDetail({ contato, open, onClose, onDelete, onConverterPac
                     {format(new Date(a.data_de_vencimento), "dd/MM/yyyy HH:mm")}
                   </div>
                 </div>
-                <Button size="icon" variant="ghost" onClick={() => deleteAgendamento(a.id)}>
-                  <Trash2 className="w-4 h-4" />
+                <Button size="icon" variant="ghost" onClick={() => deleteAgendamento(a.id)} disabled={deletingId === a.id}>
+                  {deletingId === a.id ? (
+                    <LoadingSpinner size="sm" iconColor="text-red-500" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
                 </Button>
               </div>
             ))}

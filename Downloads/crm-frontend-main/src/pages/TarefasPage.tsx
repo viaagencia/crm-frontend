@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import supabase from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addWeeks, addMonths, subWeeks, subMonths, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -20,6 +21,7 @@ export default function TarefasPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('semana');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [tarefas, setTarefas] = useState<TarefaBanco[]>([]);
+  const [loadingCreate, setLoadingCreate] = useState(false);
 
   useEffect(() => {
     buscarTarefas();
@@ -43,30 +45,36 @@ export default function TarefasPage() {
   };
 
   const testarSupabase = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    if (loadingCreate) return;
+    setLoadingCreate(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) {
-      alert('Usuário não autenticado');
-      return;
-    }
+      if (!user) {
+        alert('Usuário não autenticado');
+        return;
+      }
 
-    const { error } = await supabase
-      .from('tasks')
-      .insert([
-        {
-          title: 'Nova tarefa 🔥',
-          status: 'pending',
-          data_de_vencimento: new Date(),
-          user_id: user.id
-        }
-      ]);
+      const { error } = await supabase
+        .from('tasks')
+        .insert([
+          {
+            title: 'Nova tarefa 🔥',
+            status: 'pending',
+            data_de_vencimento: new Date(),
+            user_id: user.id
+          }
+        ]);
 
-    if (error) {
-      console.log(error);
-      alert('Erro ao salvar');
-    } else {
-      alert('Salvou!');
-      buscarTarefas();
+      if (error) {
+        console.log(error);
+        alert('Erro ao salvar');
+      } else {
+        alert('Salvou!');
+        await buscarTarefas();
+      }
+    } finally {
+      setLoadingCreate(false);
     }
   };
 
@@ -98,8 +106,12 @@ export default function TarefasPage() {
   return (
     <div className="p-6">
 
-      <Button onClick={testarSupabase} className="mb-4">
-        Testar Supabase
+      <Button onClick={testarSupabase} className="mb-4" disabled={loadingCreate}>
+        {loadingCreate ? (
+          <LoadingSpinner size="sm" text="Criando..." />
+        ) : (
+          'Testar Supabase'
+        )}
       </Button>
 
       <div className="flex items-center justify-between mb-6">
