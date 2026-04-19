@@ -36,6 +36,8 @@ export default function LeadsPage() {
   const [newPipelineDialog, setNewPipelineDialog] = useState(false);
   const [newPipelineName, setNewPipelineName] = useState('');
   const [deletePipelineConfirm, setDeletePipelineConfirm] = useState(false);
+  const [loadingAddLead, setLoadingAddLead] = useState(false);
+  const [loadingCreatePipeline, setLoadingCreatePipeline] = useState(false);
 
   const [tarefasPorLead, setTarefasPorLead] = useState<any>({});
 
@@ -101,15 +103,21 @@ export default function LeadsPage() {
   }));
 
   function handleCreatePipeline() {
-    if (!newPipelineName.trim()) return;
-    const p = crm.addPipeline(newPipelineName.trim());
-    if (p) navigate(`/leads/${p.id}`);
-    setNewPipelineName('');
-    setNewPipelineDialog(false);
+    if (!newPipelineName.trim() || loadingCreatePipeline) return;
+    setLoadingCreatePipeline(true);
+    try {
+      const p = crm.addPipeline(newPipelineName.trim());
+      if (p) navigate(`/leads/${p.id}`);
+      setNewPipelineName('');
+      setNewPipelineDialog(false);
+    } finally {
+      setLoadingCreatePipeline(false);
+    }
   }
 
   const handleAddLead = async () => {
-    if (!form.nome.trim() || !addDialog || !pipelineId || !user?.id) return;
+    if (!form.nome.trim() || !addDialog || !pipelineId || !user?.id || loadingAddLead) return;
+    setLoadingAddLead(true);
 
     try {
       // Criar lead no Supabase
@@ -139,6 +147,8 @@ export default function LeadsPage() {
       setAddDialog(null);
     } catch (err) {
       console.error('Erro ao criar lead:', err);
+    } finally {
+      setLoadingAddLead(false);
     }
   };
 
@@ -286,8 +296,14 @@ export default function LeadsPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddDialog(null)}>Cancelar</Button>
-            <Button onClick={handleAddLead}>Adicionar Lead</Button>
+            <Button variant="outline" onClick={() => setAddDialog(null)} disabled={loadingAddLead}>Cancelar</Button>
+            <Button onClick={handleAddLead} disabled={loadingAddLead || !form.nome.trim()}>
+              {loadingAddLead ? (
+                <LoadingSpinner size="sm" text="Criando..." />
+              ) : (
+                'Adicionar Lead'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -322,8 +338,14 @@ export default function LeadsPage() {
           />
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNewPipelineDialog(false)}>Cancelar</Button>
-            <Button onClick={handleCreatePipeline}>Criar</Button>
+            <Button variant="outline" onClick={() => setNewPipelineDialog(false)} disabled={loadingCreatePipeline}>Cancelar</Button>
+            <Button onClick={handleCreatePipeline} disabled={loadingCreatePipeline || !newPipelineName.trim()}>
+              {loadingCreatePipeline ? (
+                <LoadingSpinner size="sm" text="Criando..." />
+              ) : (
+                'Criar'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
