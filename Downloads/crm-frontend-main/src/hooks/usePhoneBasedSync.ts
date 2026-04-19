@@ -1,7 +1,7 @@
 /**
  * PHONE-BASED SYNC HOOK
  *
- * Sincroniza tarefas, atividades e anotações baseado no número de telefone.
+ * Sincroniza tarefas, atividades e anotações baseado no número de telefone usando Supabase.
  * CRÍTICO: Sempre que um lead/paciente com aquele número de telefone aparece no CRM,
  * ele AUTOMATICAMENTE carrega todas as tarefas, atividades e anotações do banco de dados.
  *
@@ -10,8 +10,7 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
-
-const API_URL = import.meta.env.VITE_API_URL || 'https://darksalmon-viper-304874.hostingersite.com';
+import supabase from '@/lib/supabase';
 
 interface TarefaAPI {
   id: string;
@@ -41,7 +40,7 @@ export function usePhoneBasedSync() {
   // para evitar re-syncs desnecessários
   const syncedPhonesRef = useRef<Set<string>>(new Set());
 
-  // Buscar tarefas/atividades/anotações do backend usando telefone
+  // Buscar tarefas/atividades/anotações do Supabase usando telefone
   const loadDataForContact = useCallback(async (telefone: string) => {
     if (!telefone) return { tarefas: [], atividades: [], anotacoes: [] };
 
@@ -49,16 +48,34 @@ export function usePhoneBasedSync() {
       const cleanPhone = telefone.replace(/\D/g, '');
       console.log(`[PhoneBasedSync] Buscando dados para telefone: ${cleanPhone}`);
 
-      // Buscar dados em paralelo
-      const [tarefasRes, atividadesRes, anotacoesRes] = await Promise.all([
-        fetch(`${API_URL}/api/tarefas-by-phone/${cleanPhone}`),
-        fetch(`${API_URL}/api/atividades-by-phone/${cleanPhone}`),
-        fetch(`${API_URL}/api/anotacoes-by-phone/${cleanPhone}`),
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) {
+        console.warn('[PhoneBasedSync] Usuário não autenticado');
+        return { tarefas: [], atividades: [], anotacoes: [] };
+      }
+
+      // Buscar dados em paralelo do Supabase
+      const [tarefasResult, atividadesResult, anotacoesResult] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('*')
+          .eq('telefone', cleanPhone)
+          .eq('user_id', user.id),
+        supabase
+          .from('activities')
+          .select('*')
+          .eq('telefone', cleanPhone)
+          .eq('user_id', user.id),
+        supabase
+          .from('notes')
+          .select('*')
+          .eq('telefone', cleanPhone)
+          .eq('user_id', user.id),
       ]);
 
-      const tarefas = tarefasRes.ok ? await tarefasRes.json() : [];
-      const atividades = atividadesRes.ok ? await atividadesRes.json() : [];
-      const anotacoes = anotacoesRes.ok ? await anotacoesRes.json() : [];
+      const tarefas = tarefasResult.data || [];
+      const atividades = atividadesResult.data || [];
+      const anotacoes = anotacoesResult.data || [];
 
       console.log(`[PhoneBasedSync] ✅ Encontrou ${tarefas.length} tarefas, ${atividades.length} atividades, ${anotacoes.length} anotações`);
 

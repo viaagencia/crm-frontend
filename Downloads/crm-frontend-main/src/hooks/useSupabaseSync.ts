@@ -25,11 +25,24 @@ export async function upsertLeadNoSupabase(lead: {
   origem?: string;
   stage_id?: string;
   pipeline_id?: string;
+  user_id?: string;
 }) {
   const telefone = lead.telefone.replace(/\D/g, '');
   if (!telefone) return;
 
   try {
+    // Se não tiver user_id, tentar obter da sessão
+    let userId = lead.user_id;
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      userId = user?.id;
+    }
+
+    if (!userId) {
+      console.warn('[Supabase] Nenhum usuário autenticado, abortando upsert');
+      return;
+    }
+
     const { error } = await supabase.from('leads').upsert(
       {
         telefone,
@@ -38,8 +51,9 @@ export async function upsertLeadNoSupabase(lead: {
         origem: lead.origem || '',
         pipeline_id: lead.pipeline_id || PIPELINE_ID,
         stage_id: lead.stage_id || 'novo-lead',
+        user_id: userId,
       },
-      { onConflict: 'telefone' }
+      { onConflict: 'telefone,user_id' }
     );
 
     if (error) {
